@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="assets/tree-navy.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Libre+Bodoni:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=Libre+Bodoni:ital,wght@1,400;1,500&display=swap" rel="stylesheet">
 <style>
 :root{
   --navy:#1F2A44; --navy-deep:#141B2D; --beige:#D8CBB4; --cream:#F4EEE2;
@@ -121,34 +121,34 @@ img{display:block}
 
   // ---- Menu data: edit prices / items here ----
   var SECTIONS = [
-    { title: 'Hot Drinks', ar: 'مشروبات ساخنة', groups: [{ items: [
+    { title: 'Hot Drinks', groups: [{ items: [
       ['Turkish Coffee — Single', 45], ['Turkish Coffee — Double', 55], ['Tea', 35], ['Flavored Tea', 40],
       ['Cappuccino', 85], ['Espresso — Single', 55], ['Espresso — Double', 70], ['Americano', 70],
       ['Macchiato — Single', 60], ['Macchiato — Double', 75], ['Cortado', 85], ['Flat White', 125],
       ['Hot Spanish Latte', 135], ['French Coffee', 60], ['Nescafé', 75]] }] },
-    { title: 'Iced Coffee', ar: 'قهوة مثلجة', groups: [{ items: [
+    { title: 'Iced Coffee', groups: [{ items: [
       ['Iced Latte', 95], ['Iced Cappuccino', 115], ['Iced Spanish Latte', 140], ['Iced Americano', 100],
       ['Iced Mocha', 125], ['Iced White Mocha', 135], ['Iced Caramel Latte', 110]] }] },
-    { title: 'Frappé', ar: 'فرابيه', groups: [{ items: [
+    { title: 'Frappé', groups: [{ items: [
       ['Vanilla Frappé', 130], ['Chocolate Frappé', 130], ['Caramel Frappé', 135], ['Strawberry Frappé', 125],
       ['Mocha Frappé', 135], ['White Mocha Frappé', 140], ['Espresso Frappé', 130], ['Matcha Frappé', 140]] }] },
-    { title: 'Milkshake', ar: 'ميلك شيك', groups: [{ items: [
+    { title: 'Milkshake', groups: [{ items: [
       ['Vanilla Milkshake', 120], ['Chocolate Milkshake', 130], ['Mango Milkshake', 130], ['Strawberry Milkshake', 130],
       ['Caramel Milkshake', 130], ['Lotus Milkshake', 130], ['Blueberry Milkshake', 130]] }] },
-    { title: 'Fresh Juices', ar: 'عصائر فريش', groups: [{ items: [
+    { title: 'Fresh Juices', groups: [{ items: [
       ['Mango Juice', 90], ['Strawberry Juice', 90], ['Guava Juice', 90], ['Lemon Juice', 70],
       ['Lemon Mint Juice', 80], ['Banana Milk', 90], ['Orange Juice', 90]] }] },
-    { title: 'Mojito', ar: 'موهيتو', groups: [{ items: [
+    { title: 'Mojito', groups: [{ items: [
       ['Classic Mojito', 90], ['Blueberry Mojito', 110], ['Mango Mojito', 110], ['Strawberry Mojito', 110],
       ['Piña Colada Mojito', 130], ['Peach Mojito', 110], ['Mixed Berry Mojito', 120], ['Tropical Mojito', 135],
       ['Jelly Cola Mojito', 110], ['Watermelon Mojito', 110]] }] },
-    { title: 'Smoothie', ar: 'سموذي', groups: [{ items: [
+    { title: 'Smoothie', groups: [{ items: [
       ['Blueberry Smoothie', 110], ['Mango Smoothie', 120], ['Strawberry Smoothie', 120], ['Mixed Berry Smoothie', 115],
       ['Kiwi Smoothie', 110], ['Passion Fruit Smoothie', 120], ['Cola Smoothie', 115], ['Watermelon Smoothie', 120],
       ['Peach Smoothie', 115], ['Mixed Piña Colada', 135], ['Lemon Smoothie', 90], ['Lemon Mint Smoothie', 100]] }] },
-    { title: 'Desserts', ar: 'حلويات', groups: [{ items: [
+    { title: 'Desserts', groups: [{ items: [
       ['Molten Cake', 130], ['Red Velvet Cake', 105], ['Cheesecake', 135], ['Chocolate Fudge', 135]] }] },
-    { title: 'Extras', ar: 'إضافات', groups: [
+    { title: 'Extras', groups: [
       { label: 'Additional Drinks', items: [['Small Mineral Water', 15], ['Red Bull', 100], ['Red Bull Mojito', 170]] },
       { label: 'Additions', items: [['Art', 35], ['Sauce', 25], ['Bersion', 50], ['Milk', 15]] }] }
   ];
@@ -169,7 +169,6 @@ img{display:block}
       '<img src="assets/logo-lockup-cream.png" alt="Sequoia Café" style="position:relative;width:128px;height:auto;margin-top:28px">' +
       '<img class="bob" src="assets/mascot-cassette.png" alt="Sequoia\'s cassette mascot waving" style="position:relative;width:236px;max-width:62vw;height:auto;margin-top:18px">' +
       '<p class="serif-i" style="position:relative;margin:22px 0 0;font-size:21px;line-height:1.3;text-align:center">Riverside coffee,<br>warm moments.</p>' +
-      '<p class="ar" lang="ar" dir="rtl" style="position:relative;margin:6px 0 0;font-size:15px;color:var(--beige)">قهوة على النيل ومود حلو</p>' +
       '<div style="flex:1 1 auto;min-height:24px"></div>' +
       '<button class="press btn-primary" data-go="#tracks"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><span>PRESS PLAY · OPEN MENU</span></button>' +
       '</section>';
@@ -179,7 +178,7 @@ img{display:block}
     var rows = SECTIONS.map(function (s, i) {
       return '<button class="press track in" style="animation-delay:' + (i * 40) + 'ms" data-go="#s-' + (i + 1) + '">' +
         '<span class="n">' + pad(i) + '</span>' +
-        '<span class="t"><b>' + esc(s.title) + '</b><small lang="ar">' + esc(s.ar) + '</small></span>' +
+        '<span class="t"><b>' + esc(s.title) + '</b></span>' +
         '<span class="c">' + count(s) + ' items</span>' +
         '<span style="color:var(--navy)">' + CHEV_R + '</span></button>';
     }).join('');
@@ -230,7 +229,6 @@ img{display:block}
           '<img src="assets/tree-navy.png" alt="" style="width:34px;height:auto">' +
           '<span class="pill">' + (i < 5 ? 'SIDE A' : 'SIDE B') + ' · TRACK ' + pad(i) + '</span>' +
           '<h1>' + esc(s.title) + '</h1>' +
-          '<p class="ar" lang="ar" dir="rtl" style="margin:8px 0 0;font-weight:500;font-size:17px;color:var(--ink-2)">' + esc(s.ar) + '</p>' +
           '<div class="rule caps"><i></i><span>' + count(s) + ' items · EGP</span><i></i></div>' +
         '</div>' +
         '<div class="items">' + body + '<p class="egp caps">All prices in EGP</p></div>' +
@@ -247,7 +245,6 @@ img{display:block}
       '<img class="bob" src="assets/mascot-cassette.png" alt="Sequoia\'s cassette mascot" style="position:relative;width:250px;max-width:66vw;height:auto">' +
       '<span class="caps" style="position:relative;margin-top:26px;font-size:12px;letter-spacing:.3em;color:var(--beige)">End of side B</span>' +
       '<h1 class="display" style="position:relative;margin:10px 0 0;font-size:48px;line-height:1;letter-spacing:.06em">THANK YOU</h1>' +
-      '<p class="ar" lang="ar" dir="rtl" style="position:relative;margin:12px 0 0;font-weight:500;font-size:18px;color:var(--beige)">نورتنا في سيكويا</p>' +
       '<button class="press btn-primary" data-go="#tracks" style="margin-top:36px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>PLAY IT AGAIN</span></button>' +
       '</section>';
   }
