@@ -97,9 +97,30 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .stat b.sm{font-size:22px;font-weight:700;line-height:1.2}
 .stat span{font-size:15px;color:var(--beige)}
 .sumnote{margin:12px 0 0;font-size:14px;color:var(--beige)}
+.gate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--navy) url(assets/navy-texture.jpg) center/cover no-repeat}
+.gate[hidden]{display:none}
+.gbox{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
+.gbox img{width:44px;height:auto}
+.gbox b{font-size:24px}
+.gbox span{font-size:16px;color:var(--beige)}
+.pin{width:200px;height:72px;border:2px solid rgba(244,238,226,.35);border-radius:18px;background:rgba(20,27,45,.5);color:var(--cream);text-align:center;font-family:'Abril Fatface',serif;font-size:40px;letter-spacing:.3em;outline:none;-webkit-user-select:text;user-select:text}
+.pin:focus{border-color:var(--cream)}
+.pin[aria-invalid="true"]{border-color:var(--accent)}
+.gerr{min-height:22px;color:#F2A08E!important}
+.gbtn{width:200px;height:56px;border:0;border-radius:16px;background:var(--cream);color:var(--navy);font-size:18px;font-weight:700}
 </style>
 </head>
 <body>
+<div class="gate" id="gate" hidden>
+  <form class="gbox" id="gform">
+    <img src="assets/tree-cream.png" alt="">
+    <b>شاشة الكابتن</b>
+    <span>اكتب الـ PIN عشان تفتح</span>
+    <input class="pin" id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="PIN" aria-describedby="gerr">
+    <span class="gerr" id="gerr" role="alert"></span>
+    <button class="press gbtn" type="submit">افتح</button>
+  </form>
+</div>
 <div class="wrap">
   <header>
     <div class="brand"><img src="assets/tree-cream.png" alt=""><b>SEQUOIA</b><span>· شاشة الكابتن</span></div>
@@ -113,6 +134,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 
 <script src="assets/orders.js"></script>
 <script>
+function startApp() {
 (function () {
   'use strict';
 
@@ -395,6 +417,32 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 
   render();
   flush();
+})();
+}
+
+// ---- PIN gate: asked once per device, then remembered ----
+(function () {
+  var HASH = 'cc117e96c501749011eab74d92280ecb8f4ab82be6a7c830b6da36200251bc10';
+  var gate = document.getElementById('gate'), form = document.getElementById('gform'), pin = document.getElementById('pin'), err = document.getElementById('gerr');
+  function ok() { try { return localStorage.getItem('sq-captain') === HASH; } catch (_) { return false; } }
+  function digest(v) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode('sequoia:' + v)).then(function (b) {
+      return Array.from(new Uint8Array(b)).map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
+    });
+  }
+  if (ok()) { startApp(); return; }
+  gate.hidden = false; pin.focus();
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    digest(pin.value.trim()).then(function (h) {
+      if (h === HASH) {
+        try { localStorage.setItem('sq-captain', HASH); } catch (_) {}
+        gate.hidden = true; startApp();
+      } else {
+        err.textContent = 'الرقم غلط، جرّب تاني'; pin.setAttribute('aria-invalid', 'true'); pin.value = ''; pin.focus();
+      }
+    });
+  });
 })();
 </script>
 </body>
