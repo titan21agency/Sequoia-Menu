@@ -58,7 +58,7 @@
   }
 
   // Google Sheet that keeps every handled request (set after the sheet is created)
-  var REPORT_URL = '';
+  var REPORT_URL = 'https://script.google.com/macros/s/AKfycbwbIYBj5PVRZuEDtGFrJ2aZtDKm1ZAXPf_aClYpWcwOt644ufZDRg7mSMiMOKPntrvS7g/exec';
 
   window.SequoiaOrders = { publish: publish, subscribe: subscribe, reportUrl: REPORT_URL };
 })();
