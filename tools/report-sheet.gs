@@ -3,13 +3,14 @@
  * Every request the captain marks as done is added as a row in "Log".
  * "Daily" summarises each business day (starting 6 AM).
  *
- * Setup: Extensions → Apps Script in the Google Sheet → paste this → run setup() once →
+ * Setup: a standalone Apps Script project → paste this → run setup() once →
  * Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone → copy the /exec URL.
  */
+var SHEET_ID = '1pgqQNBRRLBSHdvkM8scMMk0Q4mMi79cFb3LR7CexjGY';
 var HEADERS = ['business_day', 'table', 'kind', 'detail', 'requested', 'handled', 'wait_seconds', 'rid'];
 
 function setup() {
-  var ss = SpreadsheetApp.getActive();
+  var ss = SpreadsheetApp.openById(SHEET_ID);
   var log = ss.getSheetByName('Log') || ss.insertSheet('Log');
   if (log.getLastRow() === 0) log.appendRow(HEADERS);
   log.setFrozenRows(1);
@@ -32,7 +33,7 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents || '{}');
     var rows = (data.rows || []).slice(0, 200);
-    var log = SpreadsheetApp.getActive().getSheetByName('Log');
+    var log = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Log');
     var seen = {};
     var last = log.getLastRow();
     if (last > 1) log.getRange(2, 8, last - 1, 1).getValues().forEach(function (r) { seen[r[0]] = 1; });
