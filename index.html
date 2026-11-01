@@ -135,6 +135,20 @@ img{display:block}
 .panel .btn-primary[disabled]:active{transform:none}
 .sub{margin-top:12px;font-size:13px;letter-spacing:.14em;color:var(--ink-3)}
 .linkbtn{margin-top:6px;height:44px;padding:0 16px;border:0;background:transparent;color:var(--navy);font-size:14px;letter-spacing:.14em;text-decoration:underline;text-underline-offset:4px}
+/* Service sheet */
+.panel{max-height:92%;overflow-y:auto;overscroll-behavior:contain}
+.trow{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:14px}
+.trow .tlabel{margin:0}
+.trow .tinput{margin:0;width:110px;height:64px;font-size:36px}
+.panel .msg{margin-top:6px}
+.olabel{align-self:stretch;margin-top:20px;text-align:left;font-size:12px;letter-spacing:.24em;color:var(--tan)}
+.opts{align-self:stretch;margin-top:8px;display:flex;flex-wrap:wrap;gap:8px}
+.opt{flex:1 1 0;min-width:96px;height:50px;padding:0 12px;border:1.5px solid rgba(31,42,68,.3);border-radius:14px;background:#fff;color:var(--navy);font-weight:600;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.opt.done{background:transparent;border-style:dashed;color:var(--ink-3)}
+.opt[disabled]:active,.panel .btn-primary[disabled]:active{transform:none}
+.fb{margin-top:18px;align-self:stretch;display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:16px;background:var(--beige);color:var(--navy);text-decoration:none;text-align:left}
+.fb b{font-size:17px}
+.fb span{font-size:14px;line-height:1.35;color:var(--ink-2)}
 </style>
 </head>
 <body>
@@ -277,26 +291,40 @@ img{display:block}
       '</section>';
   }
 
-  // ---- Ready to order: customer calls the captain to their table ----
-  var COOLDOWN = 60 * 1000; // a table can call again after this
+  // ---- Table service: call the captain, ask for the bill, quick requests ----
+  var COOLDOWN = 60 * 1000;   // the same request can be sent again after this
+  var FEEDBACK_URL = 'https://forms.gle/VTLfxqve1PRwdxXH9';
+  var PAY = [['cash', 'Cash'], ['card', 'Card'], ['instapay', 'InstaPay']];
+  var QUICK = [['water', 'Water'], ['napkins', 'Napkins'], ['clean', 'Clean table']]; // edit quick requests here
   var BELL = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var X = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
 
   function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
   function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
 
-  var call = load('sq-call');            // {table, at} of the last call from this phone
-  var table = load('sq-table') || '';    // remembered table number
+  var sent = load('sq-sent') || {};       // key -> {table, at, kind, detail}  (key = kind or kind:item)
+  var last = load('sq-last');             // the most recent sent request, for the dock
+  var table = load('sq-table') || '';     // remembered table number
   var qp = /[?&](?:table|t)=(\d{1,3})\b/.exec(location.search);
   if (qp) { table = String(+qp[1]); store('sq-table', table); } // QR on the table: menu/?table=7
 
   function mmss(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
-  function recent() { return call && Date.now() - call.at < COOLDOWN ? call : null; }
+  function fresh(k) { var s = sent[k]; return s && Date.now() - s.at < COOLDOWN ? s : null; }
+  function label(kind, detail) {
+    if (kind === 'call') return 'Captain';
+    if (kind === 'bill') return 'Bill · ' + (PAY.filter(function (p) { return p[0] === detail; })[0] || [0, detail])[1];
+    return (QUICK.filter(function (q) { return q[0] === detail; })[0] || [0, detail])[1];
+  }
+  function dockText(s) {
+    if (s.kind === 'call') return 'Captain is coming · Table ' + esc(s.table);
+    if (s.kind === 'bill') return 'Bill is coming · Table ' + esc(s.table);
+    return esc(label(s.kind, s.detail)) + ' is coming · Table ' + esc(s.table);
+  }
 
   function dock() {
-    var c = recent();
-    return '<div class="dock">' + (c
-      ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>Captain is coming · Table ' + esc(c.table) + '</span></button>'
+    var s = last && Date.now() - last.at < COOLDOWN ? last : null;
+    return '<div class="dock">' + (s
+      ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(s) + '</span></button>'
       : '<button class="press call caps" data-call>' + BELL + '<span>Ready to order</span></button>') +
       '</div>';
   }
@@ -304,13 +332,12 @@ img{display:block}
   var sheet = document.createElement('div');
   sheet.className = 'sheet';
   sheet.hidden = true;
-  var tick = null;
+  var tick = null, view = null; // view: null = options, else the request just sent
 
   function openSheet() {
+    view = null;
     sheet.hidden = false;
     paintSheet();
-    var inp = sheet.querySelector('.tinput');
-    if (inp && !inp.value) inp.focus();
   }
   function closeSheet() {
     sheet.hidden = true;
@@ -319,30 +346,53 @@ img{display:block}
     if (d) d.outerHTML = dock();
   }
 
+  function optBtn(attr, text, k) {
+    var f = fresh(k);
+    return '<button class="press opt' + (f ? ' done' : '') + '" ' + attr + (f ? ' disabled' : '') + '>' +
+      (f ? '<span class="dot" aria-hidden="true"></span>' : '') + '<span>' + esc(text) + '</span></button>';
+  }
+
   function paintSheet(error) {
     clearInterval(tick); tick = null;
-    var c = recent(), html;
-    if (c) {
-      var left = Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000);
-      html = '<img class="bob" src="assets/mascot-cassette.png" alt="" style="width:120px;height:auto;margin-top:6px">' +
-        '<h2 id="sheet-title">On the way!</h2>' +
-        '<p class="serif-i" style="font-size:20px">The captain is heading to table ' + esc(c.table) + '.</p>' +
-        '<span class="sub caps" id="cd">You can call again in ' + mmss(left) + '</span>' +
-        '<button class="press btn-primary caps" data-close style="margin-top:20px"><span>Back to menu</span></button>';
-      tick = setInterval(function () {
-        var l = Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000);
-        if (l <= 0) { paintSheet(); return; }
-        var cd = sheet.querySelector('#cd');
-        if (cd) cd.textContent = 'You can call again in ' + mmss(l);
-      }, 1000);
+    var html;
+    if (view) {
+      var v = view, title, line;
+      if (v.kind === 'call') { title = 'On the way!'; line = 'The captain is heading to table ' + esc(v.table) + '.'; }
+      else if (v.kind === 'bill') { title = 'Your bill is coming'; line = 'Paying by ' + esc(label('bill', v.detail).replace('Bill · ', '')) + ' · table ' + esc(v.table) + '.'; }
+      else { title = 'Coming right up'; line = esc(label(v.kind, v.detail)) + ' for table ' + esc(v.table) + '.'; }
+      html = '<img class="bob" src="assets/mascot-cassette.png" alt="" style="width:110px;height:auto;margin-top:6px">' +
+        '<h2 id="sheet-title">' + title + '</h2>' +
+        '<p class="serif-i" style="font-size:20px">' + line + '</p>' +
+        (v.kind === 'bill'
+          ? '<a class="press fb" href="' + FEEDBACK_URL + '" target="_blank" rel="noopener"><b>How was your visit?</b><span>Tell us in 2 minutes — it goes straight to the owner.</span></a>'
+          : '') +
+        '<button class="press btn-primary caps" data-back style="margin-top:18px"><span>Anything else?</span></button>' +
+        '<button class="press linkbtn caps" data-close>Back to menu</button>';
     } else {
-      html = '<span class="pill">READY TO ORDER</span>' +
-        '<h2 id="sheet-title">Call the captain</h2>' +
-        '<p class="serif-i" style="font-size:20px">Tell us your table and we\'ll come right over.</p>' +
-        '<label class="tlabel caps" for="tbl">Table number</label>' +
-        '<input class="tinput" id="tbl" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" value="' + esc(table) + '"' + (error ? ' aria-invalid="true"' : '') + ' aria-describedby="tmsg">' +
+      var c = fresh('call');
+      html = '<span class="pill">AT YOUR SERVICE</span>' +
+        '<h2 id="sheet-title">How can we help?</h2>' +
+        '<div class="trow"><label class="tlabel caps" for="tbl">Table</label>' +
+        '<input class="tinput" id="tbl" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" value="' + esc(table) + '"' + (error ? ' aria-invalid="true"' : '') + ' aria-describedby="tmsg"></div>' +
         '<div class="msg" id="tmsg" role="alert">' + (error ? esc(error) : '') + '</div>' +
-        '<button class="press btn-primary caps" data-send>' + BELL + '<span>Call the captain</span></button>';
+        '<button class="press btn-primary caps" data-send="call"' + (c ? ' disabled' : '') + '>' + BELL + '<span>' + (c ? 'Captain is coming · <span id="cd">' + mmss(Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000)) + '</span>' : 'Ready to order') + '</span></button>' +
+        '<span class="olabel caps">Ask for the bill</span>' +
+        '<div class="opts">' + PAY.map(function (p) { return optBtn('data-send="bill" data-detail="' + p[0] + '"', p[1], 'bill'); }).join('') + '</div>' +
+        '<span class="olabel caps">Quick requests</span>' +
+        '<div class="opts">' + QUICK.map(function (q) { return optBtn('data-send="req" data-detail="' + q[0] + '"', q[1], 'req:' + q[0]); }).join('') + '</div>';
+      // tick the countdown; repaint only when a cooldown ends (keeps typing undisturbed)
+      var cooling = Object.keys(sent).filter(function (k) { return fresh(k); });
+      if (cooling.length) {
+        tick = setInterval(function () {
+          var c2 = fresh('call'), cd = sheet.querySelector('#cd');
+          if (cd && c2) cd.textContent = mmss(Math.ceil((COOLDOWN - (Date.now() - c2.at)) / 1000));
+          if (cooling.some(function (k) { return !fresh(k); })) {
+            var ti = sheet.querySelector('.tinput'); if (ti) table = ti.value;
+            var y = sheet.querySelector('.panel').scrollTop;
+            paintSheet(); sheet.querySelector('.panel').scrollTop = y;
+          }
+        }, 1000);
+      }
     }
     sheet.innerHTML = '<div class="scrim" data-close></div>' +
       '<div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
@@ -351,30 +401,38 @@ img{display:block}
       '</div>';
   }
 
-  function send() {
-    var inp = sheet.querySelector('.tinput'), btn = sheet.querySelector('[data-send]');
-    var v = inp.value.replace(/\D/g, '').replace(/^0+/, '');
-    if (!v) { paintSheet('Please enter your table number.'); sheet.querySelector('.tinput').focus(); return; }
+  function send(kind, detail) {
+    var key = kind === 'req' ? 'req:' + detail : kind;
+    if (fresh(key)) return;
+    var inp = sheet.querySelector('.tinput');
+    var v = inp ? inp.value.replace(/\D/g, '').replace(/^0+/, '') : '';
+    if (!v) { paintSheet('Please enter your table number.'); var i2 = sheet.querySelector('.tinput'); if (i2) i2.focus(); return; }
     table = v; store('sq-table', v);
-    btn.disabled = true; btn.querySelector('span').textContent = 'Calling…';
-    var at = Date.now();
-    var pub = window.SequoiaOrders ? window.SequoiaOrders.publish({ type: 'call', table: v, rid: at.toString(36) + Math.random().toString(36).slice(2, 6) })
-                                   : Promise.reject(new Error('offline'));
+    sheet.querySelectorAll('[data-send]').forEach(function (b) { b.disabled = true; });
+    var at = Date.now(), msg = { type: kind, table: v, rid: at.toString(36) + Math.random().toString(36).slice(2, 6) };
+    if (kind === 'bill') msg.pay = detail;
+    if (kind === 'req') msg.item = detail;
+    var pub = window.SequoiaOrders ? window.SequoiaOrders.publish(msg) : Promise.reject(new Error('offline'));
     pub.then(function () {
-      call = { table: v, at: at }; store('sq-call', call);
-      paintSheet();
+      var rec = { table: v, at: at, kind: kind, detail: detail || '' };
+      sent[key] = rec; last = rec;
+      Object.keys(sent).forEach(function (k) { if (!fresh(k)) delete sent[k]; });
+      store('sq-sent', sent); store('sq-last', last);
+      view = rec; paintSheet();
     }).catch(function () {
       paintSheet('Couldn\'t reach the captain. Check your connection and try again.');
     });
   }
 
   sheet.addEventListener('click', function (e) {
+    var b;
     if (e.target.closest('[data-close]')) closeSheet();
-    else if (e.target.closest('[data-send]')) send();
+    else if (e.target.closest('[data-back]')) { view = null; paintSheet(); }
+    else if ((b = e.target.closest('[data-send]'))) send(b.getAttribute('data-send'), b.getAttribute('data-detail'));
   });
   sheet.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeSheet();
-    else if (e.key === 'Enter' && e.target.classList.contains('tinput')) send();
+    else if (e.key === 'Enter' && e.target.classList.contains('tinput')) send('call');
   });
 
   function render() {

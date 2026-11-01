@@ -57,5 +57,8 @@
     return function unsubscribe() { closed = true; if (es) es.close(); };
   }
 
-  window.SequoiaOrders = { publish: publish, subscribe: subscribe };
+  // Google Sheet that keeps every handled request (set after the sheet is created)
+  var REPORT_URL = '';
+
+  window.SequoiaOrders = { publish: publish, subscribe: subscribe, reportUrl: REPORT_URL };
 })();
