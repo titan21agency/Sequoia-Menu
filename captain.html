@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141B2D">
+<meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sequoia Captain">
+<title>Sequoia — الكابتن</title>
+<link rel="icon" type="image/png" href="assets/tree-navy.png">
+<link rel="apple-touch-icon" href="assets/tree-navy.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --navy:#1F2A44; --navy-deep:#141B2D; --beige:#D8CBB4; --cream:#F4EEE2;
+  --ink-2:#3A4560; --ink-3:#4A5470; --tan:#6B5330; --accent:#B8432F; --focus:#E0A458; --ok:#7BC48A;
+  --ease-out:cubic-bezier(0.23,1,0.32,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--navy-deep)}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;color:var(--cream);-webkit-font-smoothing:antialiased;
+  background:var(--navy) url(assets/navy-texture.jpg) center/cover fixed no-repeat;min-height:100vh;min-height:100dvh;
+  -webkit-user-select:none;user-select:none}
+button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.num{font-family:'Abril Fatface',serif;font-weight:400;font-variant-numeric:tabular-nums}
+.press{transition:transform 160ms var(--ease-out),background-color 180ms ease,opacity 180ms ease}
+.press:active{transform:scale(0.97)}
+
+.wrap{max-width:1200px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
+
+header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px}
+.brand img{width:26px;height:auto}
+.brand b{font-family:'Abril Fatface',serif;font-weight:400;font-size:26px;letter-spacing:.08em}
+.brand span{font-size:18px;color:var(--beige)}
+.spacer{flex:1 1 auto}
+.status{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:999px;background:rgba(244,238,226,.08);font-size:15px;color:var(--beige)}
+.status i{width:9px;height:9px;border-radius:50%;background:var(--focus)}
+.status.live i{background:var(--ok)}
+.sound{height:36px;padding:0 14px;border-radius:999px;border:1.5px solid rgba(244,238,226,.3);background:transparent;font-size:15px}
+
+.banner{margin-top:16px;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;min-height:56px;padding:10px 18px;border:0;border-radius:16px;background:var(--focus);color:var(--navy-deep);font-size:18px;font-weight:600}
+
+.count{margin:26px 0 14px;display:flex;align-items:baseline;gap:12px}
+.count .num{font-size:56px;line-height:1}
+.count span{font-size:22px;color:var(--beige)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+.card{position:relative;background:var(--cream);color:var(--navy);border-radius:24px;padding:18px 18px 16px;display:flex;flex-direction:column;align-items:center;text-align:center;
+  border-top:8px solid var(--navy)}
+.card.warm{border-top-color:var(--focus)}
+.card.hot{border-top-color:var(--accent)}
+.card.fresh{animation:cardIn 360ms var(--ease-out) both,flash 1.2s ease 3}
+@keyframes cardIn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes flash{0%,100%{box-shadow:0 0 0 0 rgba(224,164,88,0)}50%{box-shadow:0 0 0 8px rgba(224,164,88,.55)}}
+.card .lbl{font-size:16px;font-weight:600;color:var(--tan)}
+.card .tn{font-size:88px;line-height:1;margin-top:4px}
+.card .since{margin-top:8px;font-size:17px;font-weight:500;color:var(--ink-2)}
+.card.hot .since{color:var(--accent);font-weight:700}
+.badge{position:absolute;top:12px;left:12px;height:28px;padding:0 10px;border-radius:999px;background:var(--accent);color:var(--cream);font-size:14px;font-weight:600;display:flex;align-items:center}
+.take{margin-top:16px;width:100%;height:60px;border:0;border-radius:16px;background:var(--navy);color:var(--cream);font-size:19px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px}
+.take[disabled]{opacity:.5}
+
+.empty{margin-top:40px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px}
+.empty img{width:200px;height:auto;margin-bottom:14px;animation:bob 2.6s cubic-bezier(0.45,0,0.55,1) infinite;transform-origin:50% 100%}
+@keyframes bob{0%,100%{transform:rotate(-2deg) translateY(0)}50%{transform:rotate(2deg) translateY(-6px)}}
+.empty b{font-size:26px}
+.empty span{font-size:18px;color:var(--beige)}
+
+.done{margin-top:34px;border-top:1px solid rgba(244,238,226,.15);padding-top:16px}
+.done h3{margin:0 0 12px;font-size:16px;font-weight:600;color:var(--beige)}
+.dlist{display:flex;flex-wrap:wrap;gap:10px}
+.ditem{display:flex;align-items:center;gap:12px;height:52px;padding:0 6px 0 16px;border-radius:14px;background:rgba(244,238,226,.08);font-size:16px}
+.ditem .num{font-size:24px}
+.ditem small{color:var(--beige);font-size:14px}
+.undo{height:40px;padding:0 14px;border:1.5px solid rgba(244,238,226,.3);border-radius:10px;background:transparent;font-size:15px}
+
+.toast{position:fixed;left:50%;bottom:max(20px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 20px;border-radius:14px;background:var(--accent);color:var(--cream);font-size:16px;font-weight:600;animation:cardIn 260ms var(--ease-out) both}
+@media (prefers-reduced-motion:reduce){.card,.card.fresh,.toast{animation:none}.empty img{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><img src="assets/tree-cream.png" alt=""><b>SEQUOIA</b><span>· شاشة الكابتن</span></div>
+    <div class="spacer"></div>
+    <button class="press sound" id="sound" type="button">🔔 جرّب الصوت</button>
+    <div class="status" id="status" role="status"><i></i><span>بيحاول يتصل…</span></div>
+  </header>
+  <button class="press banner" id="banner" type="button">دوس هنا عشان تشغّل صوت التنبيه وتفضل الشاشة منوّرة</button>
+  <main id="main" aria-live="polite"></main>
+</div>
+
+<script src="assets/orders.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var WARM = 2 * 60 * 1000, HOT = 5 * 60 * 1000;
+  var pending = {};   // table -> [{rid, time}]
+  var taken = [];     // [{table, at, calls}] newest first
+  var fresh = {};     // tables to highlight once
+  var busy = {};      // tables whose "took" is being sent
+  var main = document.getElementById('main');
+  var statusEl = document.getElementById('status');
+  var banner = document.getElementById('banner');
+  var audio = null, wake = null, armed = false;
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function clock(t) { var d = new Date(t), h = d.getHours(), m = d.getMinutes(); return (h % 12 || 12) + ':' + String(m).padStart(2, '0') + (h < 12 ? ' ص' : ' م'); }
+  function since(t) {
+    var m = Math.floor((Date.now() - t) / 60000);
+    if (m < 1) return 'طلبت دلوقتي';
+    if (m === 1) return 'مستنية من دقيقة';
+    if (m === 2) return 'مستنية من دقيقتين';
+    if (m <= 10) return 'مستنية من ' + m + ' دقايق';
+    return 'مستنية من ' + m + ' دقيقة';
+  }
+  function times(n) { return n === 2 ? 'نادت مرتين' : 'نادت ' + n + ' مرات'; }
+  function first(calls) { return calls.reduce(function (a, c) { return Math.min(a, c.time); }, Infinity); }
+
+  // ---- state from messages ----
+  function apply(msg, meta) {
+    var t = String(msg.table || '').replace(/\D/g, '');
+    if (!t) return false;
+    if (msg.type === 'call') {
+      var list = pending[t] || (pending[t] = []);
+      if (!list.some(function (c) { return c.rid === msg.rid; })) list.push({ rid: msg.rid || meta.id, time: meta.time });
+      if (!meta.replay) fresh[t] = 1;
+      return true;
+    }
+    if (msg.type === 'took' && pending[t]) {
+      var rids = msg.rids || [];
+      var gone = pending[t].filter(function (c) { return rids.indexOf(c.rid) > -1; });
+      pending[t] = pending[t].filter(function (c) { return rids.indexOf(c.rid) < 0; });
+      if (!pending[t].length) delete pending[t];
+      delete busy[t];
+      if (gone.length) { taken.unshift({ table: t, at: meta.time, calls: gone }); taken = taken.slice(0, 8); }
+      return false;
+    }
+    if (msg.type === 'undo') {
+      var back = msg.calls || [];
+      taken = taken.filter(function (d) { return !(d.table === t && d.calls.some(function (c) { return back.some(function (b) { return b.rid === c.rid; }); })); });
+      var l = pending[t] || (pending[t] = []);
+      back.forEach(function (b) { if (!l.some(function (c) { return c.rid === b.rid; })) l.push({ rid: b.rid, time: b.time }); });
+      if (!l.length) delete pending[t];
+      return false;
+    }
+    return false;
+  }
+
+  // ---- view ----
+  function render() {
+    var tables = Object.keys(pending).sort(function (a, b) { return first(pending[a]) - first(pending[b]); });
+    var html = '';
+    if (tables.length) {
+      html += '<div class="count"><span class="num">' + tables.length + '</span><span>' + (tables.length === 1 ? 'ترابيزة مستنية' : 'ترابيزات مستنية') + '</span></div>';
+      html += '<div class="grid">' + tables.map(function (t) {
+        var calls = pending[t], f = first(calls), age = Date.now() - f;
+        var cls = 'card' + (age >= HOT ? ' hot' : age >= WARM ? ' warm' : '') + (fresh[t] ? ' fresh' : '');
+        return '<div class="' + cls + '">' +
+          (calls.length > 1 ? '<span class="badge">' + times(calls.length) + '</span>' : '') +
+          '<span class="lbl">ترابيزة</span>' +
+          '<span class="tn num">' + esc(t) + '</span>' +
+          '<span class="since">' + since(f) + ' · ' + clock(f) + '</span>' +
+          '<button class="press take" type="button" data-take="' + esc(t) + '"' + (busy[t] ? ' disabled' : '') + '>✓ تمام، خدت الأوردر</button>' +
+        '</div>';
+      }).join('') + '</div>';
+    } else {
+      html += '<div class="empty"><img src="assets/mascot-cassette.png" alt=""><b>مفيش ترابيزات مستنية دلوقتي</b><span>أول ما ترابيزة تدوس Ready to order هتظهر هنا</span></div>';
+    }
+    if (taken.length) {
+      html += '<section class="done"><h3>اتاخد من شوية</h3><div class="dlist">' + taken.map(function (d, i) {
+        return '<div class="ditem"><span>ترابيزة</span><span class="num">' + esc(d.table) + '</span><small>' + clock(d.at) + '</small>' +
+          '<button class="press undo" type="button" data-undo="' + i + '">رجّعها</button></div>';
+      }).join('') + '</div></section>';
+    }
+    main.innerHTML = html;
+    fresh = {};
+    document.title = (tables.length ? '(' + tables.length + ') ' : '') + 'Sequoia — الكابتن';
+  }
+
+  // ---- sound + keep screen on ----
+  function chime() {
+    if (!audio) return;
+    try {
+      var now = audio.currentTime;
+      [[880, 0], [1320, 0.18], [880, 0.5], [1320, 0.68]].forEach(function (n) {
+        var o = audio.createOscillator(), g = audio.createGain();
+        o.type = 'sine'; o.frequency.value = n[0];
+        g.gain.setValueAtTime(0.0001, now + n[1]);
+        g.gain.exponentialRampToValueAtTime(0.5, now + n[1] + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + n[1] + 0.32);
+        o.connect(g); g.connect(audio.destination);
+        o.start(now + n[1]); o.stop(now + n[1] + 0.35);
+      });
+    } catch (_) {}
+  }
+  function keepAwake() {
+    if (!('wakeLock' in navigator) || document.visibilityState !== 'visible') return;
+    navigator.wakeLock.request('screen').then(function (w) { wake = w; }).catch(function () {});
+  }
+  function arm() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC && !audio) audio = new AC();
+      if (audio && audio.state === 'suspended') audio.resume();
+    } catch (_) {}
+    keepAwake();
+    armed = true;
+    banner.hidden = true;
+  }
+  banner.addEventListener('click', function () { arm(); chime(); });
+  document.getElementById('sound').addEventListener('click', function () { arm(); chime(); });
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible' && armed) keepAwake(); });
+
+  function toast(text) {
+    var el = document.createElement('div');
+    el.className = 'toast'; el.setAttribute('role', 'alert'); el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(function () { el.remove(); }, 3500);
+  }
+
+  // ---- actions ----
+  main.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-take]');
+    if (b) {
+      var t = b.getAttribute('data-take'), calls = (pending[t] || []).slice();
+      if (!calls.length) return;
+      b.disabled = true; busy[t] = 1;
+      SequoiaOrders.publish({ type: 'took', table: t, rids: calls.map(function (c) { return c.rid; }) })
+        .catch(function () { delete busy[t]; b.disabled = false; toast('النت فيه مشكلة، جرّب تاني'); });
+      return;
+    }
+    var u = e.target.closest('[data-undo]');
+    if (u) {
+      var d = taken[+u.getAttribute('data-undo')];
+      if (!d) return;
+      u.disabled = true;
+      SequoiaOrders.publish({ type: 'undo', table: d.table, calls: d.calls })
+        .catch(function () { u.disabled = false; toast('النت فيه مشكلة، جرّب تاني'); });
+    }
+  });
+
+  // ---- live connection ----
+  var queued = false;
+  function soon() { if (!queued) { queued = true; requestAnimationFrame(function () { queued = false; render(); }); } }
+  SequoiaOrders.subscribe(function (msg, meta) {
+    var isNewCall = apply(msg, meta);
+    if (isNewCall && !meta.replay) chime();
+    soon();
+  }, function (s) {
+    statusEl.className = 'status' + (s === 'live' ? ' live' : '');
+    statusEl.querySelector('span').textContent = s === 'live' ? 'متصل' : 'بيحاول يتصل…';
+  });
+
+  // refresh timers, and remind with a sound every 2 minutes while a table waits too long
+  var lastNag = 0;
+  setInterval(function () {
+    render();
+    var waiting = Object.keys(pending).some(function (t) { return Date.now() - first(pending[t]) >= HOT; });
+    if (waiting && Date.now() - lastNag > 120000) { lastNag = Date.now(); chime(); }
+  }, 15000);
+
+  render();
+})();
+</script>
+</body>
+</html>

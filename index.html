@@ -86,7 +86,7 @@ img{display:block}
 .chips{flex:0 0 auto;display:flex;gap:8px;overflow-x:auto;padding:8px 16px 12px}
 .chip{flex:0 0 auto;height:44px;padding:0 18px;border-radius:999px;border:1.5px solid rgba(244,238,226,.35);background:transparent;color:var(--cream);font-size:14px;font-weight:600;letter-spacing:.02em;white-space:nowrap}
 .chip[aria-current="true"]{background:var(--cream);color:var(--navy);border-color:var(--cream)}
-.scroll{flex:1 1 auto;overflow-y:auto;padding:4px 16px max(28px,env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+.scroll{flex:1 1 auto;overflow-y:auto;padding:4px 16px 18px;-webkit-overflow-scrolling:touch}
 .arch{position:relative;background:var(--beige);color:var(--navy);border-radius:170px 170px 22px 22px;padding:30px 24px 22px;display:flex;flex-direction:column;align-items:center;text-align:center}
 .pill{margin-top:12px;display:inline-flex;align-items:center;height:26px;padding:0 12px;border-radius:999px;background:var(--accent);color:var(--cream);font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.2em}
 .arch h1{margin:12px 0 0;font-family:'Abril Fatface',serif;font-weight:400;font-size:42px;line-height:1;letter-spacing:.01em}
@@ -108,6 +108,33 @@ img{display:block}
 
 /* Thanks */
 .thanks{align-items:center;justify-content:center;padding:40px 24px;text-align:center}
+
+/* Ready to order — dock + sheet */
+.dock{flex:0 0 auto;position:relative;padding:10px 16px max(12px,env(safe-area-inset-bottom))}
+.call{width:100%;height:54px;border:0;border-radius:999px;background:var(--accent);color:var(--cream);display:flex;align-items:center;justify-content:center;gap:10px;font-size:15px;letter-spacing:.16em;box-shadow:0 10px 24px rgba(0,0,0,.28)}
+.call.sent{background:rgba(244,238,226,.12);box-shadow:none;border:1.5px solid rgba(244,238,226,.35);letter-spacing:.1em}
+.call .dot{width:8px;height:8px;border-radius:50%;background:#7BC48A;animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.sheet{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;justify-content:flex-end}
+.sheet[hidden]{display:none}
+.scrim{position:absolute;inset:0;background:rgba(10,14,24,.6);animation:fade 220ms ease both}
+.panel{position:relative;background:var(--cream);color:var(--navy);border-radius:26px 26px 0 0;padding:10px 22px max(22px,env(safe-area-inset-bottom));display:flex;flex-direction:column;align-items:center;text-align:center;animation:panelIn 320ms var(--ease-out) both}
+@keyframes panelIn{from{transform:translateY(100%)}to{transform:none}}
+@media (prefers-reduced-motion:reduce){.panel{animation:fade 200ms ease both}}
+.grab{width:40px;height:5px;border-radius:3px;background:rgba(31,42,68,.2);margin-bottom:6px}
+.x{position:absolute;top:10px;right:10px;width:44px;height:44px;border:0;border-radius:50%;background:transparent;color:var(--ink-3);display:flex;align-items:center;justify-content:center}
+.panel h2{margin:12px 0 0;font-family:'Abril Fatface',serif;font-weight:400;font-size:34px;line-height:1.05}
+.panel p{margin:8px 0 0;font-size:18px;line-height:1.35;color:var(--ink-2)}
+.tlabel{margin-top:22px;font-size:12px;letter-spacing:.24em;color:var(--tan)}
+.tinput{margin-top:8px;width:150px;height:84px;border:2px solid rgba(31,42,68,.25);border-radius:20px;background:#fff;color:var(--navy);text-align:center;font-family:'Abril Fatface',serif;font-size:46px;outline:none;transition:border-color 160ms ease}
+.tinput:focus{border-color:var(--navy)}
+.tinput[aria-invalid="true"]{border-color:var(--accent)}
+.msg{min-height:22px;margin-top:10px;font-size:14px;line-height:1.4;color:var(--accent)}
+.panel .btn-primary{margin-top:8px;background:var(--navy);color:var(--cream)}
+.panel .btn-primary[disabled]{opacity:.55;cursor:default}
+.panel .btn-primary[disabled]:active{transform:none}
+.sub{margin-top:12px;font-size:13px;letter-spacing:.14em;color:var(--ink-3)}
+.linkbtn{margin-top:6px;height:44px;padding:0 16px;border:0;background:transparent;color:var(--navy);font-size:14px;letter-spacing:.14em;text-decoration:underline;text-underline-offset:4px}
 </style>
 </head>
 <body>
@@ -115,6 +142,7 @@ img{display:block}
 
 <noscript><p style="color:#F4EEE2;text-align:center;padding:24px">Please enable JavaScript to view the menu.</p></noscript>
 
+<script src="assets/orders.js"></script>
 <script>
 (function () {
   'use strict';
@@ -194,11 +222,11 @@ img{display:block}
         '<div class="tracks noscroll">' + rows + '</div>' +
       '</div>' +
       '<div class="foot">' +
-        '<div style="position:absolute;left:20px;bottom:max(30px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:4px">' +
+        '<div style="position:absolute;left:20px;bottom:24px;display:flex;flex-direction:column;gap:4px">' +
           '<span class="serif-i" style="font-size:18px">Pick a track,</span><span class="serif-i" style="font-size:18px">we\'ll press play.</span>' +
           '<span class="caps" style="font-size:11px;letter-spacing:.2em;color:var(--beige);margin-top:4px">All prices in EGP</span></div>' +
-        '<img class="bob" src="assets/mascot-cassette.png" alt="" style="position:absolute;right:10px;bottom:max(10px,env(safe-area-inset-bottom));width:150px;height:auto">' +
-      '</div></section>';
+        '<img class="bob" src="assets/mascot-cassette.png" alt="" style="position:absolute;right:10px;bottom:6px;width:150px;height:auto">' +
+      '</div>' + dock() + '</section>';
   }
 
   function section(i) {
@@ -236,7 +264,7 @@ img{display:block}
           '<button class="press ghost prev" data-go="' + prevGo + '"><small class="caps" style="color:var(--beige)">‹ Rewind</small><b style="color:var(--cream)">' + esc(prevLabel) + '</b></button>' +
           '<button class="press next" data-go="' + nextGo + '"><small class="caps" style="color:var(--tan);font-weight:700">Next track ›</small><b style="color:var(--navy);font-weight:700">' + esc(nextLabel) + '</b></button>' +
         '</div>' +
-      '</div></section>';
+      '</div>' + dock() + '</section>';
   }
 
   function thanks() {
@@ -249,6 +277,106 @@ img{display:block}
       '</section>';
   }
 
+  // ---- Ready to order: customer calls the captain to their table ----
+  var COOLDOWN = 60 * 1000; // a table can call again after this
+  var BELL = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var X = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
+  function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
+
+  var call = load('sq-call');            // {table, at} of the last call from this phone
+  var table = load('sq-table') || '';    // remembered table number
+  var qp = /[?&](?:table|t)=(\d{1,3})\b/.exec(location.search);
+  if (qp) { table = String(+qp[1]); store('sq-table', table); } // QR on the table: menu/?table=7
+
+  function mmss(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  function recent() { return call && Date.now() - call.at < COOLDOWN ? call : null; }
+
+  function dock() {
+    var c = recent();
+    return '<div class="dock">' + (c
+      ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>Captain is coming · Table ' + esc(c.table) + '</span></button>'
+      : '<button class="press call caps" data-call>' + BELL + '<span>Ready to order</span></button>') +
+      '</div>';
+  }
+
+  var sheet = document.createElement('div');
+  sheet.className = 'sheet';
+  sheet.hidden = true;
+  var tick = null;
+
+  function openSheet() {
+    sheet.hidden = false;
+    paintSheet();
+    var inp = sheet.querySelector('.tinput');
+    if (inp && !inp.value) inp.focus();
+  }
+  function closeSheet() {
+    sheet.hidden = true;
+    clearInterval(tick); tick = null;
+    var d = app.querySelector('.dock');
+    if (d) d.outerHTML = dock();
+  }
+
+  function paintSheet(error) {
+    clearInterval(tick); tick = null;
+    var c = recent(), html;
+    if (c) {
+      var left = Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000);
+      html = '<img class="bob" src="assets/mascot-cassette.png" alt="" style="width:120px;height:auto;margin-top:6px">' +
+        '<h2 id="sheet-title">On the way!</h2>' +
+        '<p class="serif-i" style="font-size:20px">The captain is heading to table ' + esc(c.table) + '.</p>' +
+        '<span class="sub caps" id="cd">You can call again in ' + mmss(left) + '</span>' +
+        '<button class="press btn-primary caps" data-close style="margin-top:20px"><span>Back to menu</span></button>';
+      tick = setInterval(function () {
+        var l = Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000);
+        if (l <= 0) { paintSheet(); return; }
+        var cd = sheet.querySelector('#cd');
+        if (cd) cd.textContent = 'You can call again in ' + mmss(l);
+      }, 1000);
+    } else {
+      html = '<span class="pill">READY TO ORDER</span>' +
+        '<h2 id="sheet-title">Call the captain</h2>' +
+        '<p class="serif-i" style="font-size:20px">Tell us your table and we\'ll come right over.</p>' +
+        '<label class="tlabel caps" for="tbl">Table number</label>' +
+        '<input class="tinput" id="tbl" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" value="' + esc(table) + '"' + (error ? ' aria-invalid="true"' : '') + ' aria-describedby="tmsg">' +
+        '<div class="msg" id="tmsg" role="alert">' + (error ? esc(error) : '') + '</div>' +
+        '<button class="press btn-primary caps" data-send>' + BELL + '<span>Call the captain</span></button>';
+    }
+    sheet.innerHTML = '<div class="scrim" data-close></div>' +
+      '<div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
+        '<div class="grab" aria-hidden="true"></div>' +
+        '<button class="press x" data-close aria-label="Close">' + X + '</button>' + html +
+      '</div>';
+  }
+
+  function send() {
+    var inp = sheet.querySelector('.tinput'), btn = sheet.querySelector('[data-send]');
+    var v = inp.value.replace(/\D/g, '').replace(/^0+/, '');
+    if (!v) { paintSheet('Please enter your table number.'); sheet.querySelector('.tinput').focus(); return; }
+    table = v; store('sq-table', v);
+    btn.disabled = true; btn.querySelector('span').textContent = 'Calling…';
+    var at = Date.now();
+    var pub = window.SequoiaOrders ? window.SequoiaOrders.publish({ type: 'call', table: v, rid: at.toString(36) + Math.random().toString(36).slice(2, 6) })
+                                   : Promise.reject(new Error('offline'));
+    pub.then(function () {
+      call = { table: v, at: at }; store('sq-call', call);
+      paintSheet();
+    }).catch(function () {
+      paintSheet('Couldn\'t reach the captain. Check your connection and try again.');
+    });
+  }
+
+  sheet.addEventListener('click', function (e) {
+    if (e.target.closest('[data-close]')) closeSheet();
+    else if (e.target.closest('[data-send]')) send();
+  });
+  sheet.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeSheet();
+    else if (e.key === 'Enter' && e.target.classList.contains('tinput')) send();
+  });
+
   function render() {
     var h = location.hash, m = /^#s-(\d+)$/.exec(h), html;
     if (h === '#tracks') html = tracks();
@@ -256,6 +384,7 @@ img{display:block}
     else if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length) html = section(+m[1] - 1);
     else html = cover();
     app.innerHTML = html;
+    app.appendChild(sheet);
     var chips = document.getElementById('chips');
     if (chips) {
       var on = chips.querySelector('[aria-current="true"]');
@@ -265,6 +394,7 @@ img{display:block}
   }
 
   app.addEventListener('click', function (e) {
+    if (e.target.closest('[data-call]')) { openSheet(); return; }
     var b = e.target.closest('[data-go]');
     if (!b) return;
     var to = b.getAttribute('data-go');
