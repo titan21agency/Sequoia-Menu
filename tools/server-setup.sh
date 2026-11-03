@@ -64,7 +64,7 @@ ${DOMAIN}, www.${DOMAIN} {
 
 sequoia.menu.${DOMAIN} {
 	root * /srv/sites/sequoia
-	@hidden path /.git* /tools/* /*.zip
+	@hidden path /.git* /tools/* /apps/* /*.zip
 	respond @hidden 404
 	file_server
 	encode gzip
