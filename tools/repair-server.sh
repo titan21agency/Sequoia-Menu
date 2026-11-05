@@ -16,21 +16,39 @@ command -v caddy >/dev/null || { echo "Caddy is not installed — run tools/serv
 echo "==> Backup: $BK"
 mkdir -p "$SITES"
 touch "$CF"; cp "$CF" "$BK"
+SBK="$SITES.bak-$(date +%Y%m%d-%H%M%S)"; cp -a "$SITES" "$SBK"
+NEW="$CF.new"
+# Until the new config is validated, any failure puts the site files back.
+# The live Caddyfile is only replaced after validation succeeds.
+restore() { echo "!! Failed — restoring site files; $CF was not changed."; rm -rf "$SITES"; cp -a "$SBK" "$SITES"; rm -f "$NEW"; }
+trap restore ERR
+
+# git refuses to work as root in a folder owned by caddy ("dubious ownership"),
+# so run every git command as the caddy user.
+g() { runuser -u caddy -- git "$@"; }
 
 echo "==> Moving Sequoia / payroll out of the main Caddyfile (other sites untouched)"
 awk '
   depth==0 && /\{/ && $0 ~ /^[[:space:]]*(https?:\/\/)?(sequoia\.menu\.|payroll\.)/ { skip=1 }
   depth==0 && /^[[:space:]]*import[[:space:]]+\/etc\/caddy\/sites/ { next }
   { o=gsub(/\{/,"{"); c=gsub(/\}/,"}"); if(!skip) print; depth+=o-c; if(depth<=0){depth=0; skip=0} }
-' "$BK" > "$CF.tmp"
-printf '\n# Each site lives in its own file here\nimport %s/*.caddy\n' "$SITES" >> "$CF.tmp"
-mv "$CF.tmp" "$CF"
+' "$BK" > "$NEW"
+printf '\n# Each site lives in its own file here\nimport %s/*.caddy\n' "$SITES" >> "$NEW"
 
 echo "==> Sequoia menu files"
 if [ ! -d /srv/sites/sequoia/.git ]; then
-  rm -rf /srv/sites/sequoia; git clone --depth 1 --quiet "$REPO" /srv/sites/sequoia
+  if [ -d /srv/sites/sequoia ] && [ -n "$(ls -A /srv/sites/sequoia)" ]; then
+    mv /srv/sites/sequoia "/srv/sites/sequoia.old-$(date +%Y%m%d-%H%M%S)"
+  fi
+  install -d -o caddy -g caddy /srv/sites/sequoia
+  g clone --depth 1 --quiet "$REPO" /srv/sites/sequoia
 else
-  git -C /srv/sites/sequoia fetch --quiet origin main && git -C /srv/sites/sequoia reset --hard --quiet origin/main
+  chown -R caddy:caddy /srv/sites/sequoia
+  if [ -n "$(g -C /srv/sites/sequoia status --porcelain)" ]; then
+    echo "!! /srv/sites/sequoia has local changes — leaving the menu files as they are."
+  else
+    g -C /srv/sites/sequoia fetch --quiet origin main && g -C /srv/sites/sequoia reset --hard --quiet origin/main
+  fi
 fi
 chown -R caddy:caddy /srv/sites/sequoia
 echo '*/5 * * * * caddy git -C /srv/sites/sequoia pull --ff-only --quiet >/dev/null 2>&1' > /etc/cron.d/sequoia-pull
@@ -59,10 +77,11 @@ CADDY
 fi
 
 echo "==> Checking config"
-if ! caddy validate --config "$CF" --adapter caddyfile; then
-  echo "!! Config invalid — restoring the backup, nothing changed."
-  cp "$BK" "$CF"; exit 1
+if ! caddy validate --config "$NEW" --adapter caddyfile; then
+  restore; exit 1
 fi
+trap - ERR
+mv "$NEW" "$CF"
 systemctl enable caddy >/dev/null 2>&1
 systemctl reload caddy 2>/dev/null || systemctl restart caddy
 sleep 3
