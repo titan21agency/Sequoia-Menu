@@ -55,13 +55,20 @@ cat > /etc/cron.d/sequoia-pull <<'CRON'
 */5 * * * * caddy git -C /srv/sites/sequoia pull --ff-only --quiet >/dev/null 2>&1
 CRON
 
-cat > /etc/caddy/Caddyfile <<CADDY
+# Each site gets its own file in /etc/caddy/sites/ so one site's setup can never erase another.
+mkdir -p /etc/caddy/sites
+if [ ! -s /etc/caddy/Caddyfile ] || grep -q "Caddy's configuration file" /etc/caddy/Caddyfile; then
+  cat > /etc/caddy/Caddyfile <<CADDY
 ${DOMAIN}, www.${DOMAIN} {
 	root * /srv/sites/agency
 	file_server
 	encode gzip
 }
+CADDY
+fi
+grep -q '^import /etc/caddy/sites/' /etc/caddy/Caddyfile || printf '\nimport /etc/caddy/sites/*.caddy\n' >> /etc/caddy/Caddyfile
 
+cat > /etc/caddy/sites/sequoia.caddy <<CADDY
 sequoia.menu.${DOMAIN} {
 	root * /srv/sites/sequoia
 	@hidden path /.git* /tools/* /apps/* /*.zip
