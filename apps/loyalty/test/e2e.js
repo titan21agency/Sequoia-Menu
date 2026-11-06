@@ -18,23 +18,21 @@ const { createApp } = require('../server');
   const base = 'http://127.0.0.1:' + app.server.address().port;
   const browser = await chromium.launch();
   const snap = async (page, name) => shots && page.screenshot({ path: path.join(shots, name + '.png') });
-  const ntfy = [];
 
   // ---------- customer phone (390px) ----------
   const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await phone.route('https://ntfy.sh/**', r => { ntfy.push(r.request().postData()); r.fulfill({ status: 200, body: '{}', contentType: 'application/json' }); });
   await phone.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   const p = await phone.newPage();
   const loaded = [];
   p.on('request', r => loaded.push(r.url()));
-  await p.goto(base + '/?table=7#tracks');
+  await p.goto(base + '/?t=7&s=' + app.tableSig(7) + '#tracks'); // signed table QR link
   await p.waitForSelector('[data-acct]');
   assert.ok(!loaded.some(u => u.includes('account.js')), 'loyalty code must not load with the menu');
 
   // existing Ready to order flow still works
   await p.click('[data-call]'); await p.click('[data-send="call"]');
   await p.waitForSelector('text=On the way!');
-  assert.match(ntfy[0], /"type":"call","table":"7"/);
+  assert.match(app.db.prepare('SELECT body FROM calls ORDER BY id DESC').get().body, /"type":"call","table":"7"/); // stored by our API, no ntfy.sh
   await p.click('.sheet [data-close] >> nth=1');
 
   // حسابي -> OTP login
@@ -54,14 +52,13 @@ const { createApp } = require('../server');
 
   // ---------- captain iPad ----------
   const ipad = await browser.newContext({ viewport: { width: 1024, height: 1366 }, deviceScaleFactor: 1 });
-  await ipad.addInitScript(() => localStorage.setItem('sq-captain', 'cc117e96c501749011eab74d92280ecb8f4ab82be6a7c830b6da36200251bc10'));
-  await ipad.route('https://ntfy.sh/**', r => r.fulfill({ status: 200, body: '', contentType: 'text/event-stream' }));
   await ipad.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
   const c = await ipad.newPage();
   await c.goto(base + '/captain-ly9fglcp.html');
+  await c.waitForSelector('#gu'); // staff login gate (server session) replaces the old PIN
+  await c.fill('#gu', 'kareem'); await c.fill('#pin', 'demo-pass-1'); await c.click('#gform button');
+  await c.waitForSelector('#gate', { state: 'hidden' });
   await c.click('#t-card');
-  await c.waitForSelector('#cc-login');
-  await c.fill('[name=u]', 'kareem'); await c.fill('[name=p]', 'demo-pass-1'); await c.click('#cc-login button');
   await c.waitForSelector('[data-id]'); // customer appears under table 7
   assert.match(await c.textContent('[data-id]'), /7.*010•••••678/s);
   await c.fill('[name=q]', '01012345678'); await c.click('#cc-find button');

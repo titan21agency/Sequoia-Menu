@@ -6,7 +6,8 @@
 (function () {
   'use strict';
   var API = '/api';
-  var host, sheet, es = null, state = { view: 'loading', phone: '', card: null, err: '', resendAt: 0 }, table = '', tick = null;
+  var host, sheet, es = null, state = { view: 'loading', phone: '', card: null, err: '', resendAt: 0, wa: null }, table = '', tick = null;
+  var loginOpts = null, poll = null; // loginOpts.whatsapp: server accepts "send SEQ-code from WhatsApp" login
 
   var AR = '٠١٢٣٤٥٦٧٨٩';
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -37,12 +38,23 @@
   function body() {
     var s = state, c = s.card;
     if (s.view === 'loading') return '<p class="lc-muted" style="margin-top:28px">لحظة…</p>';
+    if (s.view === 'wa') {
+      return '<span class="pill">سيكويا كارد</span>' +
+        '<h2 id="sheet-title">ادخل من واتساب</h2>' +
+        '<p class="lc-muted">ابعت الرسالة دي لسيكويا على واتساب من رقمك، وهتدخل هنا لوحدك.</p>' +
+        '<p class="lc-in" dir="ltr" style="text-align:center;font-weight:700;letter-spacing:.08em">' + esc(s.wa.code) + '</p>' +
+        '<a class="press btn-primary" style="display:block;text-align:center;text-decoration:none" href="' + esc(s.wa.wa) + '" target="_blank" rel="noopener">افتح واتساب وابعت</a>' +
+        '<div class="msg" role="alert">' + esc(s.err) + '</div>' +
+        '<p class="lc-muted" aria-live="polite">مستنيين رسالتك…</p>' +
+        '<button class="press linkbtn" data-edit>ادخل برقم الموبايل بدل كده</button>';
+    }
     if (s.view === 'phone' || s.view === 'code') {
       var codeStep = s.view === 'code';
       var wait = Math.max(0, Math.ceil((s.resendAt - Date.now()) / 1000));
       return '<span class="pill">سيكويا كارد</span>' +
         '<h2 id="sheet-title">حسابي</h2>' +
         '<p class="lc-muted">' + (codeStep ? 'بعتنالك كود من ٦ أرقام على واتساب <span dir="ltr">' + esc(s.phone) + '</span>' : 'سجّل برقمك واجمع أختام مع كل زيارة.') + '</p>' +
+        (!codeStep && loginOpts && loginOpts.whatsapp ? '<button class="press btn-primary" data-wa>ادخل برسالة واتساب</button><p class="lc-muted" style="text-align:center">أو</p>' : '') +
         '<form class="lc-form" data-form="' + s.view + '" novalidate>' +
           (codeStep
             ? '<label class="tlabel" for="lc-in">الكود</label><input id="lc-in" class="lc-in" dir="ltr" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*" placeholder="••••••">'
@@ -108,11 +120,32 @@
   }
 
   function loadMe(view) {
-    return call('GET', '/me' + (table ? '?table=' + encodeURIComponent(table) : '')).then(function (j) {
-      if (j.status === 200) { state.phone = j.phone; state.card = j.card; state.view = view || 'account'; live(true); }
-      else { state.view = 'phone'; live(false); }
-      paint();
+    stopPoll();
+    var sig = /[?&]s=([A-Za-z0-9_-]{12})(?:&|$)/.exec(location.search);
+    return call('GET', '/me' + (table ? '?table=' + encodeURIComponent(table) + (sig ? '&s=' + sig[1] : '') : '')).then(function (j) {
+      if (j.status === 200) { state.phone = j.phone; state.card = j.card; state.view = view || 'account'; live(true); return paint(); }
+      state.view = 'phone'; live(false);
+      if (loginOpts) return paint();
+      return call('GET', '/login/options').then(function (o) { loginOpts = o.status === 200 ? o : { otp: true }; paint(); }, function () { loginOpts = null; paint(); });
     }, function () { state.view = 'phone'; state.err = MSG.net; paint(); });
+  }
+
+  // Option B: show "SEQ-123456", customer sends it to the café on WhatsApp, we poll until the server saw it.
+  function stopPoll() { clearInterval(poll); poll = null; }
+  function startWhatsApp() {
+    state.err = '';
+    call('POST', '/otp/inbound/start', {}).then(function (j) {
+      if (j.status !== 200) { state.err = MSG[j.error] || MSG.send; return paint(); }
+      state.wa = j; state.view = 'wa'; paint();
+      stopPoll();
+      poll = setInterval(function () {
+        call('GET', '/otp/inbound/status').then(function (s) {
+          if (state.view !== 'wa') return stopPoll();
+          if (s.status === 200 && s.ok) return loadMe('card');
+          if (s.status === 410) { stopPoll(); state.view = 'phone'; state.err = MSG.code; paint(); }
+        }, function () {});
+      }, 2000);
+    }, function () { state.err = MSG.net; paint(); });
   }
 
   function onSubmit(e) {
@@ -139,7 +172,7 @@
     }, function () { state.err = MSG.net; paint(); });
   }
 
-  function close() { sheet.hidden = true; clearInterval(tick); live(false); }
+  function close() { sheet.hidden = true; clearInterval(tick); stopPoll(); live(false); }
 
   function open(container, opts) {
     host = container; table = (opts && opts.table) || '';
@@ -150,7 +183,8 @@
         if (t.closest('[data-close]')) close();
         else if (t.closest('[data-card]')) { state.view = 'card'; paint(); }
         else if (t.closest('[data-account]')) { state.view = 'account'; paint(); }
-        else if (t.closest('[data-edit]')) { state.view = 'phone'; state.err = ''; paint(); }
+        else if (t.closest('[data-edit]')) { stopPoll(); state.view = 'phone'; state.err = ''; paint(); }
+        else if (t.closest('[data-wa]')) startWhatsApp();
         else if (t.closest('[data-resend]')) requestCode();
         else if (t.closest('[data-logout]')) call('POST', '/me/logout', {}).then(function () { live(false); state = { view: 'phone', phone: '', card: null, err: '', resendAt: 0 }; paint(); });
       });

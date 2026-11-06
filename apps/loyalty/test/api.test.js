@@ -109,7 +109,9 @@ test('full cycle: 6 stamps with cooldown, idempotency, redeem once, card resets'
 });
 test('table presence shows masked customers to staff', async () => {
   const t = await setup(); const c = await customerLogin(t); const s = await staffLogin(t);
-  await c('GET', '/me?table=7');
+  await c('GET', '/me?table=8'); // unsigned QR link: ignored
+  assert.equal((await s('GET', '/staff/tables')).body.length, 0);
+  await c('GET', '/me?table=7&s=' + t.app.tableSig(7));
   const rows = (await s('GET', '/staff/tables')).body;
   assert.equal(rows.length, 1); assert.equal(rows[0].table, 7); assert.equal(rows[0].phone, '010•••••678');
   t.close();

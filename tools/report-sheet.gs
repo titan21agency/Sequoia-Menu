@@ -5,6 +5,8 @@
  *
  * Setup: a standalone Apps Script project → paste this → run setup() once →
  * Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone → copy the /exec URL.
+ * Then set Script property TOKEN to a long random value, and on the server set REPORT_SHEET_URL (the /exec URL)
+ * and REPORT_SHEET_TOKEN (same value). The browser never sees either; captain rows go through /api/staff/report.
  */
 var SHEET_ID = '1pgqQNBRRLBSHdvkM8scMMk0Q4mMi79cFb3LR7CexjGY';
 var HEADERS = ['business_day', 'table', 'kind', 'detail', 'requested', 'handled', 'wait_seconds', 'rid'];
@@ -32,6 +34,9 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     var data = JSON.parse(e.postData.contents || '{}');
+    // Only our server knows the token (Project settings → Script properties → TOKEN = same value as REPORT_SHEET_TOKEN).
+    var token = PropertiesService.getScriptProperties().getProperty('TOKEN');
+    if (!token || data.token !== token) return ContentService.createTextOutput('forbidden');
     var rows = (data.rows || []).slice(0, 200);
     var log = SpreadsheetApp.openById(SHEET_ID).getSheetByName('Log');
     var seen = {};

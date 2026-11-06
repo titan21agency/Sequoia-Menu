@@ -106,6 +106,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .pin{width:200px;height:72px;border:2px solid rgba(244,238,226,.35);border-radius:18px;background:rgba(20,27,45,.5);color:var(--cream);text-align:center;font-family:'Abril Fatface',serif;font-size:40px;letter-spacing:.3em;outline:none;-webkit-user-select:text;user-select:text}
 .pin:focus{border-color:var(--cream)}
 .pin[aria-invalid="true"]{border-color:var(--accent)}
+.gin{width:100%;max-width:300px;height:56px;font-family:inherit;font-size:18px;letter-spacing:0}
 .gerr{min-height:22px;color:#F2A08E!important}
 .gbtn{width:200px;height:56px;border:0;border-radius:16px;background:var(--cream);color:var(--navy);font-size:18px;font-weight:700}
 .tabs{margin-top:16px;display:flex;gap:6px;padding:5px;border-radius:18px;background:rgba(20,27,45,.45);width:max-content;max-width:100%}
@@ -119,10 +120,11 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   <form class="gbox" id="gform">
     <img src="assets/tree-cream.png" alt="">
     <b>شاشة الكابتن</b>
-    <span>اكتب الـ PIN عشان تفتح</span>
-    <input class="pin" id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" aria-label="PIN" aria-describedby="gerr">
+    <span>دخول الموظفين</span>
+    <input class="pin gin" id="gu" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="60" placeholder="اسم المستخدم" aria-label="اسم المستخدم" aria-describedby="gerr" dir="ltr">
+    <input class="pin gin" id="pin" type="password" autocomplete="current-password" maxlength="200" placeholder="كلمة السر" aria-label="كلمة السر" aria-describedby="gerr" dir="ltr">
     <span class="gerr" id="gerr" role="alert"></span>
-    <button class="press gbtn" type="submit">افتح</button>
+    <button class="press gbtn" type="submit">دخول</button>
   </form>
 </div>
 <div class="wrap">
@@ -327,8 +329,9 @@ function startApp() {
     var o = outbox(), now = Date.now(), ready = o.filter(function (x) { return x.due <= now; });
     if (!ready.length) return;
     flushing = true;
-    fetch(REPORT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ rows: ready.map(function (x) { return x.row; }) }) })
-      .then(function () {
+    fetch(REPORT_URL, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'sequoia' }, body: JSON.stringify({ rows: ready.map(function (x) { return x.row; }) }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         var ids = ready.map(function (x) { return x.row.rid; });
         setOutbox(outbox().filter(function (x) { return ids.indexOf(x.row.rid) < 0; }));
         try { localStorage.setItem('sq-saved-at', String(Date.now())); } catch (_) {}
@@ -450,28 +453,28 @@ function startApp() {
   tabs.card.addEventListener('click', function () { show('card'); });
 })();
 
-// ---- PIN gate: asked once per device, then remembered ----
+// ---- Staff login gate: server-side session (sq_staff cookie, 12 h). The calls stream itself needs it. ----
 (function () {
-  var HASH = 'cc117e96c501749011eab74d92280ecb8f4ab82be6a7c830b6da36200251bc10';
-  var gate = document.getElementById('gate'), form = document.getElementById('gform'), pin = document.getElementById('pin'), err = document.getElementById('gerr');
-  function ok() { try { return localStorage.getItem('sq-captain') === HASH; } catch (_) { return false; } }
-  function digest(v) {
-    return crypto.subtle.digest('SHA-256', new TextEncoder().encode('sequoia:' + v)).then(function (b) {
-      return Array.from(new Uint8Array(b)).map(function (x) { return x.toString(16).padStart(2, '0'); }).join('');
-    });
-  }
-  if (ok()) { startApp(); return; }
-  gate.hidden = false; pin.focus();
+  var gate = document.getElementById('gate'), form = document.getElementById('gform'), user = document.getElementById('gu'), pin = document.getElementById('pin'), err = document.getElementById('gerr');
+  var started = false;
+  try { localStorage.removeItem('sq-captain'); } catch (_) {} // old client-side PIN flag, no longer used
+  function begin() { gate.hidden = true; if (!started) { started = true; startApp(); } }
+  function ask(msg) { err.textContent = msg || ''; gate.hidden = false; (user.value ? pin : user).focus(); }
+  window.SequoiaOrders.onLoggedOut = function () { location.reload(); };
+  fetch('/api/staff/me', { credentials: 'same-origin' }).then(function (r) { if (r.ok) begin(); else ask(); }, function () { ask('مفيش اتصال. جرّب تاني.'); });
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    digest(pin.value.trim()).then(function (h) {
-      if (h === HASH) {
-        try { localStorage.setItem('sq-captain', HASH); } catch (_) {}
-        gate.hidden = true; startApp();
-      } else {
-        err.textContent = 'الرقم غلط، جرّب تاني'; pin.setAttribute('aria-invalid', 'true'); pin.value = ''; pin.focus();
-      }
-    });
+    var btn = form.querySelector('button'); btn.disabled = true; err.textContent = '';
+    fetch('/api/staff/login', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'sequoia' },
+      body: JSON.stringify({ username: user.value.trim(), password: pin.value })
+    }).then(function (r) {
+      btn.disabled = false;
+      if (r.ok) { pin.value = ''; return begin(); }
+      pin.value = ''; pin.setAttribute('aria-invalid', 'true');
+      ask(r.status === 429 ? 'محاولات كتير. استنى ربع ساعة.' : 'اسم المستخدم أو كلمة السر غلط.');
+    }, function () { btn.disabled = false; ask('مفيش اتصال. جرّب تاني.'); });
   });
 })();
 </script>

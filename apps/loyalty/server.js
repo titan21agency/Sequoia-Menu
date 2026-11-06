@@ -20,6 +20,10 @@ CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, at INTEGER NOT NULL
 CREATE TABLE IF NOT EXISTS otps(phone TEXT PRIMARY KEY, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0, sent_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN('customer','staff')), subject_id INTEGER NOT NULL, expires INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS presence(customer_id INTEGER PRIMARY KEY REFERENCES customers(id), table_number INTEGER NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS inbound_logins(nonce_hash TEXT PRIMARY KEY, code TEXT NOT NULL, expires INTEGER NOT NULL, phone TEXT, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS inbound_code ON inbound_logins(code);
+CREATE TABLE IF NOT EXISTS calls(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, table_number INTEGER NOT NULL, body TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS calls_at ON calls(at);
 CREATE INDEX IF NOT EXISTS stamps_customer ON stamps(customer_id);
 CREATE INDEX IF NOT EXISTS stamps_created ON stamps(created_at);
 CREATE INDEX IF NOT EXISTS rewards_customer ON rewards(customer_id);
@@ -29,6 +33,12 @@ CREATE INDEX IF NOT EXISTS audit_customer ON audit_log(customer_id, id);
 function hashPass(p) { const salt = crypto.randomBytes(16); return salt.toString('hex') + ':' + crypto.scryptSync(p, salt, 64).toString('hex'); }
 function checkPass(p, stored) { const [s, h] = String(stored).split(':'); const c = crypto.scryptSync(String(p), Buffer.from(s, 'hex'), 64); return crypto.timingSafeEqual(c, Buffer.from(h, 'hex')); }
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
+
+function inboundFromEnv(env = process.env) {
+  const secret = env.MESSAGEPRO_WEBHOOK_SECRET, waNumber = String(env.SEQUOIA_WA_NUMBER || '').replace(/\D/g, '');
+  if (!secret || !waNumber) return null;
+  return { secret, waNumber, inboxId: +env.MESSAGEPRO_INBOX_ID || null };
+}
 
 // ---------- tiny fixed-window rate limiter ----------
 function limiter() {
@@ -53,6 +63,8 @@ function createApp(opts = {}) {
   const H = 3600e3;
 
   const otpHash = (phone, code) => crypto.createHmac('sha256', SECRET).update(phone + ':' + code).digest('hex');
+  // Option B (WhatsApp inbound login): enabled when the webhook secret and the café's WhatsApp number are set.
+  const INBOUND = opts.inbound !== undefined ? opts.inbound : inboundFromEnv();
 
   // ---------- live updates (SSE): channel 'c:<customerId>' for the customer card, 'staff' for the captain tab ----------
   const subs = new Map();
@@ -72,16 +84,25 @@ function createApp(opts = {}) {
   const SEC_HEADERS = {
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'X-Frame-Options': 'DENY',
     'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Cross-Origin-Resource-Policy': 'same-origin', 'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()',
   };
+  // dev/test static pages get the same CSP that Caddy sends in production (tools/server-setup.sh)
+  const PAGE_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
   function send(res, code, body, headers = {}) {
     res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...SEC_HEADERS, ...headers });
     res.end(JSON.stringify(body));
   }
-  function readBody(req) {
+  function readRaw(req, max) {
     return new Promise((ok, bad) => {
-      let d = ''; req.on('data', c => { d += c; if (d.length > 1e4) { bad(new Error('too large')); req.destroy(); } });
-      req.on('end', () => { try { const j = d ? JSON.parse(d) : {}; ok(j && typeof j === 'object' ? j : {}); } catch { bad(new Error('bad json')); } });
+      const parts = []; let n = 0;
+      req.on('data', c => { n += c.length; if (n > max) { bad(new Error('too large')); req.destroy(); } else parts.push(c); });
+      req.on('end', () => ok(Buffer.concat(parts).toString('utf8')));
+      req.on('error', bad);
     });
+  }
+  async function readBody(req) {
+    const d = await readRaw(req, 1e4);
+    try { const j = d ? JSON.parse(d) : {}; return j && typeof j === 'object' ? j : {}; } catch { throw new Error('bad json'); }
   }
   const cookies = req => Object.fromEntries((req.headers.cookie || '').split(';').map(c => c.trim().split('=')).filter(x => x[0]));
   function cookie(name, value, maxAgeSec, sameSite) {
@@ -116,6 +137,62 @@ function createApp(opts = {}) {
       WHERE a.customer_id=? AND a.action IN('stamp','redeem') AND a.id<? ORDER BY a.id DESC LIMIT ?`).all(customerId, before || 2 ** 53, limit + 1);
     return { items: rows.slice(0, limit).map(r => ({ id: r.id, at: r.at, action: r.action, staff: r.staff, table: (JSON.parse(r.detail || '{}')).table ?? null })), more: rows.length > limit };
   }
+  function loginCustomer(phone, t, ctx, via) {
+    db.prepare('INSERT INTO customers(phone,created_at,last_visit_at) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET last_visit_at=excluded.last_visit_at').run(phone, t, t);
+    const c = db.prepare('SELECT * FROM customers WHERE phone=?').get(phone);
+    const ttl = CFG.CUSTOMER_SESSION_DAYS * 24 * H;
+    const token = newSession('customer', c.id, ttl);
+    audit('customer', c.id, 'login', c.id, { via }, ctx);
+    return cookie('sq_card', token, ttl / 1000, 'Lax');
+  }
+
+  // Message Pro (Chatwoot-based) signs webhooks: X-Chatwoot-Signature = "sha256=" + HMAC-SHA256(secret, `${timestamp}.${rawBody}`),
+  // X-Chatwoot-Timestamp = unix seconds. Old or unsigned deliveries are rejected.
+  function verifyWebhook(req, raw) {
+    const ts = String(req.headers['x-chatwoot-timestamp'] || '');
+    const sig = String(req.headers['x-chatwoot-signature'] || '');
+    if (!/^\d{9,11}$/.test(ts) || Math.abs(now() / 1000 - +ts) > 300) return false;
+    const want = Buffer.from('sha256=' + crypto.createHmac('sha256', INBOUND.secret).update(ts + '.' + raw).digest('hex'));
+    const got = Buffer.from(sig);
+    return got.length === want.length && crypto.timingSafeEqual(got, want);
+  }
+  async function inboundHook(req, res, ctx) {
+    const raw = await readRaw(req, 1e6);
+    if (!verifyWebhook(req, raw)) { console.warn('webhook: rejected (signature/timestamp)'); return send(res, 401, { error: 'signature' }); }
+    let ev; try { ev = JSON.parse(raw); } catch { return send(res, 400, { error: 'bad json' }); }
+    const t = now();
+    const incoming = ev.event === 'message_created' && (ev.message_type === 'incoming' || ev.message_type === 0) && !ev.private;
+    const inboxOk = !INBOUND.inboxId || +(ev.inbox?.id ?? ev.conversation?.inbox_id) === INBOUND.inboxId;
+    const text = String(ev.content || '').replace(/[٠-٩]/g, d => String(d.charCodeAt(0) - 0x660));
+    const m = text.match(/\bSEQ[\s-]?(\d{6})\b/i);
+    if (!incoming || !inboxOk || !m) return send(res, 200, { ok: true, ignored: true });
+    const phone = R.normalizePhone(ev.sender?.phone_number || ev.conversation?.meta?.sender?.phone_number || '');
+    if (!phone || limited('hook:' + phone, 10, H, t)) return send(res, 200, { ok: true, ignored: true });
+    const r = db.prepare('UPDATE inbound_logins SET phone=? WHERE code=? AND expires>? AND phone IS NULL').run(phone, m[1], t);
+    if (r.changes) audit('customer', null, 'whatsapp_verified', null, { phone: R.maskPhone(phone) }, ctx);
+    return send(res, 200, { ok: true });
+  }
+
+  // ---------- signed table QR links: /?t=7&s=<sig>. Unsigned ?table=7 only while TABLE_QR_LEGACY=1 (old printed QRs). ----------
+  const LEGACY_TABLES = opts.legacyTables ?? process.env.TABLE_QR_LEGACY === '1';
+  const tableSig = n => crypto.createHmac('sha256', SECRET).update('table:' + n).digest('base64url').slice(0, 12);
+  function tableOk(n, s) {
+    if (typeof s === 'string' && s.length === 12) {
+      const a = Buffer.from(s), b = Buffer.from(tableSig(n));
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+    }
+    return LEGACY_TABLES;
+  }
+
+  const REPORT = opts.report || { url: process.env.REPORT_SHEET_URL || '', token: process.env.REPORT_SHEET_TOKEN || '' };
+  const CALL_HISTORY_MS = 12 * H;
+  function addCall(msg, t) {
+    if (Math.random() < 0.02) db.prepare('DELETE FROM calls WHERE at<?').run(t - 2 * CALL_HISTORY_MS);
+    const id = Number(db.prepare('INSERT INTO calls(at,table_number,body) VALUES(?,?,?)').run(t, +msg.table, JSON.stringify(msg)).lastInsertRowid);
+    publish('calls', 'msg', { id, time: t, body: msg });
+    return id;
+  }
+
   const reqId = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
   const tableNo = v => { const n = +v; return Number.isInteger(n) && n >= 1 && n <= 999 ? n : null; };
 
@@ -124,6 +201,9 @@ function createApp(opts = {}) {
     const p = url.pathname.slice(4); const M = req.method;
     const ctx = { ip: (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress, device: String(req.headers['user-agent'] || '').slice(0, 160) };
     const t = now();
+
+    // Server-to-server webhook from Message Pro: authenticated by its HMAC signature, not by the CSRF rules below.
+    if (p === '/hooks/messagepro' && M === 'POST') return INBOUND ? inboundHook(req, res, ctx) : send(res, 404, { error: 'not found' });
 
     // CSRF: state changes must come from our own pages (custom header + same-origin check).
     if (M !== 'GET') {
@@ -156,12 +236,45 @@ function createApp(opts = {}) {
       const ok = crypto.timingSafeEqual(Buffer.from(otpHash(phone, code), 'hex'), Buffer.from(row.code_hash, 'hex'));
       if (!ok) { db.prepare('UPDATE otps SET attempts=attempts+1 WHERE phone=?').run(phone); return bad(); }
       db.prepare('DELETE FROM otps WHERE phone=?').run(phone);
-      db.prepare('INSERT INTO customers(phone,created_at,last_visit_at) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET last_visit_at=excluded.last_visit_at').run(phone, t, t);
-      const c = db.prepare('SELECT * FROM customers WHERE phone=?').get(phone);
-      const ttl = CFG.CUSTOMER_SESSION_DAYS * 24 * H;
-      const token = newSession('customer', c.id, ttl);
-      audit('customer', c.id, 'login', c.id, null, ctx);
-      return send(res, 200, { ok: true }, { 'Set-Cookie': cookie('sq_card', token, ttl / 1000, 'Lax') });
+      return send(res, 200, { ok: true }, { 'Set-Cookie': loginCustomer(phone, t, ctx, 'otp') });
+    }
+
+    // ----- customer: Option B — send "SEQ-123456" to the café on WhatsApp -----
+    if (p === '/login/options' && M === 'GET') return send(res, 200, { otp: true, whatsapp: !!INBOUND });
+    if (p === '/otp/inbound/start' && M === 'POST') {
+      if (!INBOUND) return send(res, 404, { error: 'not found' });
+      if (limited('ib:' + ctx.ip, CFG.OTP_MAX_PER_IP_HOUR, H, t)) return send(res, 429, { error: 'rate' });
+      db.prepare('DELETE FROM inbound_logins WHERE expires<?').run(t);
+      let code;
+      do code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
+      while (db.prepare('SELECT 1 FROM inbound_logins WHERE code=?').get(code));
+      const nonce = crypto.randomBytes(32).toString('base64url');
+      const ttl = CFG.OTP_TTL_MIN * 60e3;
+      db.prepare('INSERT INTO inbound_logins(nonce_hash,code,expires,phone,created_at) VALUES(?,?,?,NULL,?)').run(sha(nonce), code, t + ttl, t);
+      const text = 'SEQ-' + code;
+      return send(res, 200, { code: text, wa: `https://wa.me/${INBOUND.waNumber}?text=${encodeURIComponent(text)}`, expiresIn: ttl / 1000 },
+        { 'Set-Cookie': cookie('sq_pending', nonce, ttl / 1000, 'Strict') });
+    }
+    if (p === '/otp/inbound/status' && M === 'GET') {
+      if (!INBOUND) return send(res, 404, { error: 'not found' });
+      const n = cookies(req).sq_pending;
+      const row = n && n.length < 100 && db.prepare('SELECT * FROM inbound_logins WHERE nonce_hash=?').get(sha(n));
+      if (!row || row.expires < t) return send(res, 410, { error: 'expired' });
+      if (!row.phone) return send(res, 200, { pending: true });
+      db.prepare('DELETE FROM inbound_logins WHERE nonce_hash=?').run(row.nonce_hash);
+      return send(res, 200, { ok: true }, { 'Set-Cookie': [loginCustomer(row.phone, t, ctx, 'whatsapp'), cookie('sq_pending', '', 0, 'Strict')] });
+    }
+
+    // ----- table calls from the menu (replaces ntfy.sh): call waiter / bill / request -----
+    if (p === '/calls' && M === 'POST') {
+      const b = await readBody(req); const tn = tableNo(b.table);
+      if (!tn || !tableOk(tn, b.s)) return send(res, 403, { error: 'table' });
+      if (!['call', 'bill', 'req'].includes(b.type)) return send(res, 400, { error: 'type' });
+      if (limited('call:' + ctx.ip, 40, H, t) || limited('calltbl:' + tn, 20, 10 * 60e3, t)) return send(res, 429, { error: 'rate' });
+      const msg = { type: b.type, table: String(tn), rid: /^[a-z0-9]{4,24}$/.test(b.rid) ? b.rid : t.toString(36) };
+      if (b.type === 'bill') msg.pay = String(b.pay ?? '').slice(0, 40);
+      if (b.type === 'req') msg.item = String(b.item ?? '').slice(0, 80);
+      return send(res, 200, { ok: true, id: addCall(msg, t) });
     }
 
     // ----- customer: read-only card -----
@@ -172,7 +285,7 @@ function createApp(opts = {}) {
       if (!c) return send(res, 401, { error: 'login' });
       if (p === '/me' && M === 'GET') {
         const tn = tableNo(url.searchParams.get('table'));
-        if (tn) { db.prepare('INSERT INTO presence VALUES(?,?,?) ON CONFLICT(customer_id) DO UPDATE SET table_number=excluded.table_number, at=excluded.at').run(c.id, tn, t); publish('staff', 'presence', {}); }
+        if (tn && tableOk(tn, url.searchParams.get('s'))) { db.prepare('INSERT INTO presence VALUES(?,?,?) ON CONFLICT(customer_id) DO UPDATE SET table_number=excluded.table_number, at=excluded.at').run(c.id, tn, t); publish('staff', 'presence', {}); }
         return send(res, 200, { phone: c.phone, card: card(c) });
       }
       if (p === '/me/stream' && M === 'GET') return stream(req, res, 'c:' + c.id);
@@ -202,6 +315,36 @@ function createApp(opts = {}) {
     if (p === '/staff/me' && M === 'GET') return send(res, 200, { name: staff.name, role: staff.role, rules: { required: CFG.STAMPS_REQUIRED, reward: CFG.REWARD_NAME, hours: CFG.MIN_HOURS_BETWEEN_STAMPS } });
     if (p === '/staff/logout' && M === 'POST') { db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_staff)); return send(res, 200, { ok: true }, { 'Set-Cookie': cookie('sq_staff', '', 0, 'Strict') }); }
     if (p === '/staff/stream' && M === 'GET') return stream(req, res, 'staff');
+
+    // captain screen: live table calls (replays the last 12 h on connect) and took/undo updates
+    if (p === '/staff/calls/stream' && M === 'GET') {
+      stream(req, res, 'calls');
+      for (const r of db.prepare('SELECT id, at, body FROM calls WHERE at>? ORDER BY id').all(t - CALL_HISTORY_MS))
+        res.write(`event: msg\ndata: ${JSON.stringify({ id: r.id, time: r.at, body: JSON.parse(r.body) })}\n\n`);
+      return;
+    }
+    // captain "تمام" rows -> Google report sheet; URL + token stay on the server
+    if (p === '/staff/report' && M === 'POST') {
+      if (!REPORT.url) return send(res, 503, { error: 'report off' });
+      const b = await readRaw(req, 2e5); let rows;
+      try { rows = JSON.parse(b).rows; } catch { return send(res, 400, { error: 'bad json' }); }
+      if (!Array.isArray(rows) || rows.length > 200) return send(res, 400, { error: 'bad' });
+      try {
+        const r = await (opts.fetchImpl || fetch)(REPORT.url, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ token: REPORT.token, by: staff.username, rows }), signal: AbortSignal.timeout(15000) });
+        if (!r.ok) return send(res, 502, { error: 'sheet' });
+      } catch { return send(res, 502, { error: 'sheet' }); }
+      return send(res, 200, { ok: true });
+    }
+    if (p === '/staff/calls' && M === 'POST') {
+      const b = await readBody(req); const tn = tableNo(b.table);
+      if (!tn || !['took', 'undo'].includes(b.type)) return send(res, 400, { error: 'bad' });
+      const msg = { type: b.type, table: String(tn), by: staff.name };
+      if (b.type === 'took') msg.rids = (Array.isArray(b.rids) ? b.rids : []).filter(x => typeof x === 'string' && x.length <= 24).slice(0, 50);
+      if (b.type === 'undo') msg.calls = (Array.isArray(b.calls) ? b.calls : []).slice(0, 50);
+      if (JSON.stringify(msg).length > 8000) return send(res, 400, { error: 'bad' });
+      return send(res, 200, { ok: true, id: addCall(msg, t) });
+    }
 
     // customers signed in at a table in the last 3 hours (masked phones)
     if (p === '/staff/tables' && M === 'GET') {
@@ -254,7 +397,7 @@ function createApp(opts = {}) {
     const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
     const file = path.normalize(path.join(STATIC_ROOT, rel));
     if (!file.startsWith(STATIC_ROOT) || /\/(\.git|tools|apps)(\/|$)/.test(rel) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SEC_HEADERS });
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SEC_HEADERS, ...(file.endsWith('.html') ? { 'Content-Security-Policy': PAGE_CSP } : {}) });
     fs.createReadStream(file).pipe(res);
   }
 
@@ -274,7 +417,7 @@ function createApp(opts = {}) {
       .run(username.toLowerCase(), name || username, hashPass(pw), role);
     return pw;
   }
-  return { server, db, setStaff };
+  return { server, db, setStaff, tableSig };
 }
 
 module.exports = { createApp };
@@ -294,6 +437,12 @@ if (require.main === module) {
     const [, , , username, role = 'captain', name, pw] = process.argv;
     if (!username) { console.log('usage: node server.js set-staff <username> <captain|admin> "<name>" [password]'); process.exit(1); }
     console.log(`User: ${username}\nPassword: ${app.setStaff(username, role, name, pw)}\nRole: ${role}`);
+    process.exit(0);
+  }
+  if (process.argv[2] === 'table-links') {
+    const [, , , base, from = '1', to = from] = process.argv;
+    if (!base) { console.log('usage: node server.js table-links https://<menu domain>/ <from> [to]'); process.exit(1); }
+    for (let n = +from; n <= +to; n++) { const u = new URL(base); u.searchParams.set('t', n); u.searchParams.set('s', app.tableSig(n)); console.log(n + '\t' + u); }
     process.exit(0);
   }
   const PORT = +process.env.PORT || 3200;
