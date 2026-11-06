@@ -13,7 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Abril+Fatface&family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Libre+Bodoni:ital,wght@0,400;0,700;1,400;1,500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --navy:#1F2A44; --navy-deep:#141B2D; --beige:#D8CBB4; --cream:#F4EEE2;
+  --navy:#1F2A44; --navy-deep:#141B2D; --beige:#DACBB4; --cream:#F4EEE2;
   --ink-2:#3A4560; --ink-3:#4A5470; --tan:#6B5330; --accent:#B8432F; --focus:#E0A458;
   --ease-out:cubic-bezier(0.23,1,0.32,1);
 }
@@ -295,7 +295,7 @@ img{display:block}
       '<span style="position:absolute;top:max(14px,env(safe-area-inset-top));inset-inline-end:14px;display:flex;gap:8px;z-index:2">' + acctBtn() + langBtn() + '</span>' +
       '<div class="est caps"><i></i><span>' + T('est') + '</span><i></i></div>' +
       LOGO +
-      '<img class="bob" src="assets/mascot-cassette-v2.webp" alt="Sequoia\'s cassette mascot waving" style="position:relative;width:236px;max-width:62vw;height:auto;margin-top:18px">' +
+      '<img class="bob" src="assets/mascot-walkman.webp" alt="Sequoia\'s Walkman mascot waving" width="700" height="901" style="position:relative;width:184px;max-width:48vw;height:auto;margin-top:16px">' +
       '<p class="serif-i" style="position:relative;margin:22px 0 0;font-size:21px;line-height:1.3;text-align:center">' + T('tagline') + '</p>' +
       '<div style="flex:1 1 auto;min-height:24px"></div>' +
       '<button class="press btn-primary" data-go="#tracks"><svg class="flip" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><span>' + T('open') + '</span></button>' +
@@ -325,7 +325,7 @@ img{display:block}
         '<div style="position:absolute;inset-inline-start:20px;bottom:24px;display:flex;flex-direction:column;gap:4px">' +
           '<span class="serif-i" style="font-size:18px">' + T('pick1') + '</span><span class="serif-i" style="font-size:18px">' + T('pick2') + '</span>' +
           '<span class="caps" style="font-size:11px;letter-spacing:.2em;color:var(--beige);margin-top:4px">' + T('prices') + '</span></div>' +
-        '<img class="bob" src="assets/mascot-cassette-v2.webp" alt="" style="position:absolute;inset-inline-end:10px;bottom:6px;width:150px;height:auto">' +
+        '<img class="bob" src="assets/mascot-cassette-v3.webp" width="750" height="557" alt="" style="position:absolute;inset-inline-end:10px;bottom:6px;width:150px;height:auto">' +
       '</div>' + dock() + '</section>';
   }
 
@@ -370,7 +370,7 @@ img{display:block}
   function thanks() {
     return '<section class="screen thanks">' +
       '<div class="forest" aria-hidden="true" style="height:320px;opacity:.5"></div>' +
-      '<img class="bob" src="assets/mascot-cassette-v2.webp" alt="Sequoia\'s cassette mascot" style="position:relative;width:250px;max-width:66vw;height:auto">' +
+      '<img class="bob" src="assets/mascot-cassette-v3.webp" width="750" height="557" alt="Sequoia\'s cassette mascot" style="position:relative;width:250px;max-width:66vw;height:auto">' +
       '<span class="caps" style="position:relative;margin-top:26px;font-size:12px;letter-spacing:.3em;color:var(--beige)">' + T('endB') + '</span>' +
       '<h1 class="display" style="position:relative;margin:10px 0 0;font-size:48px;line-height:1.1;letter-spacing:.06em">' + T('thanks') + '</h1>' +
       '<button class="press btn-primary" data-go="#tracks" style="margin-top:36px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>' + T('again') + '</span></button>' +
@@ -468,7 +468,7 @@ img{display:block}
       if (v.kind === 'call') { title = V('onWay'); line = V('heading')(esc(v.table)); }
       else if (v.kind === 'bill') { title = V('billTitle'); line = V('paying')(esc(label('bill', v.detail)), esc(v.table)); }
       else { title = V('upTitle'); line = V('forTable')(esc(label(v.kind, v.detail)), esc(v.table)); }
-      html = '<img class="bob" src="assets/mascot-cassette-v2.webp" alt="" style="width:110px;height:auto;margin-top:6px">' +
+      html = '<img class="bob" src="assets/mascot-walkman.webp" alt="" width="700" height="901" style="width:84px;height:auto;margin-top:6px">' +
         '<h2 id="sheet-title">' + title + '</h2>' +
         '<p class="serif-i" style="font-size:20px">' + line + '</p>' +
         (v.kind === 'bill'
