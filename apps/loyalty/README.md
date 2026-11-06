@@ -74,7 +74,7 @@ Measured on the same Windows dev machine, before → after. API: `node apps/loya
 
 | Menu first load | before | after |
 |---|---|---|
-| Images | 427 KB (PNG/JPG) | 70 KB (WebP at display size) |
+| Images | 427 KB (PNG/JPG) | ~150 KB (WebP; background texture kept at q90 so its grain survives, logo is inline SVG) |
 | Our bytes (HTML + images, uncompressed HTML) | ~472 KB | ~117 KB |
 
 What changed: prepared-statement cache (SQL was compiled on every request), `synchronous=NORMAL` + `busy_timeout` (safe with WAL; was an fsync per write), `stamps(customer_id, created_at)` index, WebP images sized to how they are shown (originals kept; the favicon stays PNG), Caddy `zstd gzip` and one-week caching for images. `/api/me` p95 moved within run-to-run noise. `/staff/tables` still runs ~4 queries per seated customer; fine at café scale, batch it if tables get slow.
