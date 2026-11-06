@@ -25,7 +25,7 @@ button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 img{display:block}
 
 .app{position:relative;margin:0 auto;width:100%;max-width:480px;height:100vh;height:100dvh;overflow:hidden;
-  background:var(--navy) url(assets/navy-texture.jpg) center/cover no-repeat}
+  background:var(--navy) url(assets/navy-texture.webp) center/cover no-repeat}
 @media (min-width:520px){.app{height:min(100dvh,900px);top:max(0px,calc((100dvh - 900px)/2));border-radius:28px;box-shadow:0 30px 80px rgba(0,0,0,.5)}}
 
 .screen{position:absolute;inset:0;display:flex;flex-direction:column;animation:screenIn 280ms var(--ease-out) both}
@@ -47,7 +47,7 @@ img{display:block}
 .noscroll{scrollbar-width:none}.noscroll::-webkit-scrollbar{display:none}
 
 .forest{position:absolute;left:0;right:0;bottom:0;pointer-events:none;
-  background:url(assets/forest-navy.jpg) center bottom/100% auto no-repeat;
+  background:url(assets/forest-navy.webp) center bottom/100% auto no-repeat;
   -webkit-mask-image:linear-gradient(to bottom,transparent 0%,#000 55%);mask-image:linear-gradient(to bottom,transparent 0%,#000 55%)}
 
 .caps{font-family:'Barlow Semi Condensed',sans-serif;font-weight:600;text-transform:uppercase}
@@ -291,8 +291,8 @@ img{display:block}
       '<div class="forest" aria-hidden="true" style="height:360px;opacity:.55"></div>' +
       '<span style="position:absolute;top:max(14px,env(safe-area-inset-top));inset-inline-end:14px;display:flex;gap:8px;z-index:2">' + acctBtn() + langBtn() + '</span>' +
       '<div class="est caps"><i></i><span>' + T('est') + '</span><i></i></div>' +
-      '<img src="assets/logo-lockup-cream.png" alt="Sequoia Café" style="position:relative;width:128px;height:auto;margin-top:28px">' +
-      '<img class="bob" src="assets/mascot-cassette.png" alt="Sequoia\'s cassette mascot waving" style="position:relative;width:236px;max-width:62vw;height:auto;margin-top:18px">' +
+      '<img src="assets/logo-lockup-cream.webp" alt="Sequoia Café" style="position:relative;width:128px;height:auto;margin-top:28px">' +
+      '<img class="bob" src="assets/mascot-cassette.webp" alt="Sequoia\'s cassette mascot waving" style="position:relative;width:236px;max-width:62vw;height:auto;margin-top:18px">' +
       '<p class="serif-i" style="position:relative;margin:22px 0 0;font-size:21px;line-height:1.3;text-align:center">' + T('tagline') + '</p>' +
       '<div style="flex:1 1 auto;min-height:24px"></div>' +
       '<button class="press btn-primary" data-go="#tracks"><svg class="flip" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><span>' + T('open') + '</span></button>' +
@@ -309,7 +309,7 @@ img{display:block}
     }).join('');
     return '<section class="screen" style="padding-top:max(12px,env(safe-area-inset-top))">' +
       '<div class="bar" style="padding:8px 16px 0;height:52px">' +
-        '<button class="press ghost" data-go="#" aria-label="' + T('backCover') + '" style="padding-inline-start:4px"><img src="assets/tree-cream.png" alt="" style="width:20px;height:auto"><span class="display wm" style="font-size:22px;letter-spacing:.08em">SEQUOIA</span></button>' +
+        '<button class="press ghost" data-go="#" aria-label="' + T('backCover') + '" style="padding-inline-start:4px"><img src="assets/tree-cream.webp" alt="" style="width:20px;height:auto"><span class="display wm" style="font-size:22px;letter-spacing:.08em">SEQUOIA</span></button>' +
         '<span style="display:flex;align-items:center;gap:12px"><span class="caps" style="font-size:13px;letter-spacing:.24em;color:var(--beige)">' + T('menu') + '</span>' + acctBtn() + langBtn() + '</span>' +
       '</div>' +
       '<div class="jcard">' +
@@ -322,7 +322,7 @@ img{display:block}
         '<div style="position:absolute;inset-inline-start:20px;bottom:24px;display:flex;flex-direction:column;gap:4px">' +
           '<span class="serif-i" style="font-size:18px">' + T('pick1') + '</span><span class="serif-i" style="font-size:18px">' + T('pick2') + '</span>' +
           '<span class="caps" style="font-size:11px;letter-spacing:.2em;color:var(--beige);margin-top:4px">' + T('prices') + '</span></div>' +
-        '<img class="bob" src="assets/mascot-cassette.png" alt="" style="position:absolute;inset-inline-end:10px;bottom:6px;width:150px;height:auto">' +
+        '<img class="bob" src="assets/mascot-cassette.webp" alt="" style="position:absolute;inset-inline-end:10px;bottom:6px;width:150px;height:auto">' +
       '</div>' + dock() + '</section>';
   }
 
@@ -345,13 +345,13 @@ img{display:block}
     return '<section class="screen">' +
       '<div class="bar">' +
         '<button class="press ghost caps" data-go="#tracks" style="font-size:14px;letter-spacing:.18em">' + CHEV_L + '<span>' + T('menu') + '</span></button>' +
-        '<span class="wordmark"><img src="assets/tree-cream.png" alt="" style="width:16px;height:auto"><span class="wm" style="font-size:19px">SEQUOIA</span></span>' +
+        '<span class="wordmark"><img src="assets/tree-cream.webp" alt="" style="width:16px;height:auto"><span class="wm" style="font-size:19px">SEQUOIA</span></span>' +
         '<span style="display:flex;align-items:center;gap:8px;padding-inline-end:6px"><span class="caps" style="font-size:14px;letter-spacing:.08em;color:var(--beige);font-variant-numeric:tabular-nums" dir="ltr">' + pad(i) + ' / ' + pad(last) + '</span>' + acctBtn() + langBtn() + '</span>' +
       '</div>' +
       '<nav class="chips noscroll" id="chips" aria-label="' + T('sections') + '">' + chips + '</nav>' +
       '<div class="scroll noscroll">' +
         '<div class="arch">' +
-          '<img src="assets/tree-navy.png" alt="" style="width:34px;height:auto">' +
+          '<img src="assets/tree-navy.webp" alt="" style="width:34px;height:auto">' +
           '<span class="pill">' + (i < 5 ? T('sideA') : T('sideB')) + ' · ' + T('track') + ' ' + pad(i) + '</span>' +
           '<h1>' + esc(st(s)) + '</h1>' +
           '<div class="rule caps"><i></i><span>' + T('items')(count(s)) + ' · ' + T('egp') + '</span><i></i></div>' +
@@ -367,7 +367,7 @@ img{display:block}
   function thanks() {
     return '<section class="screen thanks">' +
       '<div class="forest" aria-hidden="true" style="height:320px;opacity:.5"></div>' +
-      '<img class="bob" src="assets/mascot-cassette.png" alt="Sequoia\'s cassette mascot" style="position:relative;width:250px;max-width:66vw;height:auto">' +
+      '<img class="bob" src="assets/mascot-cassette.webp" alt="Sequoia\'s cassette mascot" style="position:relative;width:250px;max-width:66vw;height:auto">' +
       '<span class="caps" style="position:relative;margin-top:26px;font-size:12px;letter-spacing:.3em;color:var(--beige)">' + T('endB') + '</span>' +
       '<h1 class="display" style="position:relative;margin:10px 0 0;font-size:48px;line-height:1.1;letter-spacing:.06em">' + T('thanks') + '</h1>' +
       '<button class="press btn-primary" data-go="#tracks" style="margin-top:36px"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>' + T('again') + '</span></button>' +
@@ -465,7 +465,7 @@ img{display:block}
       if (v.kind === 'call') { title = V('onWay'); line = V('heading')(esc(v.table)); }
       else if (v.kind === 'bill') { title = V('billTitle'); line = V('paying')(esc(label('bill', v.detail)), esc(v.table)); }
       else { title = V('upTitle'); line = V('forTable')(esc(label(v.kind, v.detail)), esc(v.table)); }
-      html = '<img class="bob" src="assets/mascot-cassette.png" alt="" style="width:110px;height:auto;margin-top:6px">' +
+      html = '<img class="bob" src="assets/mascot-cassette.webp" alt="" style="width:110px;height:auto;margin-top:6px">' +
         '<h2 id="sheet-title">' + title + '</h2>' +
         '<p class="serif-i" style="font-size:20px">' + line + '</p>' +
         (v.kind === 'bill'

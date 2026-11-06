@@ -24,7 +24,7 @@
 *{box-sizing:border-box}
 html,body{margin:0;min-height:100%;background:var(--navy-deep)}
 body{font-family:'IBM Plex Sans Arabic',sans-serif;color:var(--cream);-webkit-font-smoothing:antialiased;
-  background:var(--navy) url(assets/navy-texture.jpg) center/cover fixed no-repeat;min-height:100vh;min-height:100dvh;
+  background:var(--navy) url(assets/navy-texture.webp) center/cover fixed no-repeat;min-height:100vh;min-height:100dvh;
   -webkit-user-select:none;user-select:none}
 button{font:inherit;color:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 button:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
@@ -97,7 +97,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .stat b.sm{font-size:22px;font-weight:700;line-height:1.2}
 .stat span{font-size:15px;color:var(--beige)}
 .sumnote{margin:12px 0 0;font-size:14px;color:var(--beige)}
-.gate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--navy) url(assets/navy-texture.jpg) center/cover no-repeat}
+.gate{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--navy) url(assets/navy-texture.webp) center/cover no-repeat}
 .gate[hidden]{display:none}
 .gbox{width:100%;max-width:360px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}
 .gbox img{width:44px;height:auto}
@@ -118,7 +118,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 <body>
 <div class="gate" id="gate" hidden>
   <form class="gbox" id="gform">
-    <img src="assets/tree-cream.png" alt="">
+    <img src="assets/tree-cream.webp" alt="">
     <b>شاشة الكابتن</b>
     <span>دخول الموظفين</span>
     <input class="pin gin" id="gu" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="60" placeholder="اسم المستخدم" aria-label="اسم المستخدم" aria-describedby="gerr" dir="ltr">
@@ -129,7 +129,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 </div>
 <div class="wrap">
   <header>
-    <div class="brand"><img src="assets/tree-cream.png" alt=""><b>SEQUOIA</b><span>· شاشة الكابتن</span></div>
+    <div class="brand"><img src="assets/tree-cream.webp" alt=""><b>SEQUOIA</b><span>· شاشة الكابتن</span></div>
     <div class="spacer"></div>
     <button class="press sound" id="sound" type="button">🔔 جرّب الصوت</button>
     <div class="status" id="status" role="status"><i></i><span>بيحاول يتصل…</span></div>
@@ -288,7 +288,7 @@ function startApp() {
         '</div>';
       }).join('') + '</div>';
     } else {
-      html += '<div class="empty"><img src="assets/mascot-cassette.png" alt=""><b>مفيش ترابيزات مستنية دلوقتي</b><span>أول ما ترابيزة تنادي أو تطلب الحساب هتظهر هنا</span></div>';
+      html += '<div class="empty"><img src="assets/mascot-cassette.webp" alt=""><b>مفيش ترابيزات مستنية دلوقتي</b><span>أول ما ترابيزة تنادي أو تطلب الحساب هتظهر هنا</span></div>';
     }
     if (taken.length) {
       html += '<section class="done"><h3>اتعمل من شوية</h3><div class="dlist">' + taken.map(function (d, i) {

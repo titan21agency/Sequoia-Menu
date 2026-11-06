@@ -70,7 +70,7 @@
         '<h2 id="sheet-title">حسابي</h2>' +
         '<p class="lc-muted" dir="ltr" style="font-size:20px">' + esc(s.phone) + '</p>' +
         '<button class="press lc-entry" data-card>' +
-          '<img src="assets/tree-navy.png" alt="" width="30" height="34">' +
+          '<img src="assets/tree-navy.webp" alt="" width="30" height="34">' +
           '<span class="lc-entry-t"><b>سيكويا كارد</b><span>' + (c.complete ? 'مكافأتك جاهزة!' : 'عندك ' + c.count + ' من ' + c.required + ' أختام') + '</span>' + progress(c) + '</span>' +
           '<span class="flip">' + ICON_BACK + '</span></button>' +
         '<div class="lc-stat"><span>مكافآت خدتها</span><b>' + c.rewards + '</b></div>' +
@@ -83,7 +83,7 @@
         slots += '<div class="lc-slot' + (at ? ' on' : '') + '">' + (at ? ICON_CUP + '<small dir="ltr">' + date(at) + '</small>' : '<span>' + (i + 1) + '</span>') + '</div>';
       }
       return '<button class="press lc-back" data-account aria-label="رجوع لحسابي">' + ICON_BACK + '<span>حسابي</span></button>' +
-        '<img src="assets/tree-navy.png" alt="Sequoia" width="38" height="44" style="margin-top:4px">' +
+        '<img src="assets/tree-navy.webp" alt="Sequoia" width="38" height="44" style="margin-top:4px">' +
         '<h2 id="sheet-title">سيكويا كارد</h2>' +
         '<p class="lc-muted">اجمع ' + c.required + ' أختام و' + esc(c.rewardName) + '</p>' +
         '<div class="lc-grid">' + slots + '</div>' + progress(c) +

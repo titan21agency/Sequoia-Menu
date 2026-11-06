@@ -75,8 +75,12 @@ sequoia.menu.${DOMAIN} {
 		@hidden path /.git* /tools/* /apps/* /*.zip /.claude/*
 		respond @hidden 404
 		file_server
-		encode gzip
-		header Cache-Control "no-cache"
+		encode zstd gzip
+		# images are cached for a week (rename the file when it changes); pages/scripts always revalidate
+		@img path *.webp *.png *.jpg
+		header @img Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
+		@other not path *.webp *.png *.jpg
+		header @other Cache-Control "no-cache"
 	}
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

@@ -61,4 +61,22 @@ With `NODE_ENV=production` the server refuses to start without `WHATSAPP_PROVIDE
 - **Headers**: Caddy (`tools/server-setup.sh`) sends HSTS, CSP, nosniff, frame-deny, Referrer- and Permissions-Policy; the dev static server sends the same CSP.
 - **Secrets check** before each push: `bash tools/check-secrets.sh`.
 
+## Performance (Phase 3)
+Measured on the same Windows dev machine, before → after. API: `node apps/loyalty/test/bench.js 5 32` (in-process server, SQLite WAL file, 2,000 customers, 60 seated, 500 calls; 32 concurrent clients, 5 s each). Menu: first load at 375 px, local server.
+
+| API endpoint | req/s | p50 ms | p95 ms |
+|---|---|---|---|
+| `GET /api/me` | 1,069 → 1,234 | 26 → 20 | 48 → 55 |
+| `GET /api/staff/tables` | 128 → 314 | 243 → 101 | 336 → 115 |
+| `GET /api/staff/customer` | 845 → 1,325 | 32 → 23 | 78 → 34 |
+| `POST /api/staff/stamp` | 256 → 685 | 122 → 34 | 149 → 82 |
+| `POST /api/calls` | 378 → 1,120 | 83 → 24 | 101 → 63 |
+
+| Menu first load | before | after |
+|---|---|---|
+| Images | 427 KB (PNG/JPG) | 70 KB (WebP at display size) |
+| Our bytes (HTML + images, uncompressed HTML) | ~472 KB | ~117 KB |
+
+What changed: prepared-statement cache (SQL was compiled on every request), `synchronous=NORMAL` + `busy_timeout` (safe with WAL; was an fsync per write), `stamps(customer_id, created_at)` index, WebP images sized to how they are shown (originals kept; the favicon stays PNG), Caddy `zstd gzip` and one-week caching for images. `/api/me` p95 moved within run-to-run noise. `/staff/tables` still runs ~4 queries per seated customer; fine at café scale, batch it if tables get slow.
+
 In production Caddy should proxy `/api/*` on the menu domain to `127.0.0.1:3200` (same origin, so cookies stay first-party).

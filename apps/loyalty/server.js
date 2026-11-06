@@ -12,6 +12,7 @@ const OTP = require('./otp');
 
 const SCHEMA = `
 PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
+PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA temp_store=MEMORY; -- NORMAL is crash-safe with WAL (may lose the last commit on power loss, never corrupts)
 CREATE TABLE IF NOT EXISTS customers(id INTEGER PRIMARY KEY, phone TEXT UNIQUE NOT NULL, created_at INTEGER NOT NULL, last_visit_at INTEGER, cycle INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS staff(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN('captain','admin')), pass TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS stamps(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), staff_id INTEGER NOT NULL REFERENCES staff(id), table_number INTEGER, created_at INTEGER NOT NULL, cycle_id INTEGER NOT NULL, request_id TEXT UNIQUE);
@@ -24,7 +25,8 @@ CREATE TABLE IF NOT EXISTS inbound_logins(nonce_hash TEXT PRIMARY KEY, code TEXT
 CREATE INDEX IF NOT EXISTS inbound_code ON inbound_logins(code);
 CREATE TABLE IF NOT EXISTS calls(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, table_number INTEGER NOT NULL, body TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS calls_at ON calls(at);
-CREATE INDEX IF NOT EXISTS stamps_customer ON stamps(customer_id);
+CREATE INDEX IF NOT EXISTS stamps_customer_at ON stamps(customer_id, created_at);
+DROP INDEX IF EXISTS stamps_customer;
 CREATE INDEX IF NOT EXISTS stamps_created ON stamps(created_at);
 CREATE INDEX IF NOT EXISTS rewards_customer ON rewards(customer_id);
 CREATE INDEX IF NOT EXISTS audit_customer ON audit_log(customer_id, id);
@@ -55,6 +57,9 @@ function createApp(opts = {}) {
   const now = opts.now || (() => Date.now());
   const db = new DatabaseSync(opts.dbFile || ':memory:');
   db.exec(SCHEMA);
+  // prepared-statement cache: compiling SQL on every request was the main CPU cost
+  const stmts = new Map();
+  const Q = sql => { let st = stmts.get(sql); if (!st) { st = db.prepare(sql); stmts.set(sql, st); } return st; };
   const sendOtp = opts.sendOtp || OTP.fromEnv();
   const SECRET = opts.secret || process.env.LOYALTY_SECRET || crypto.randomBytes(32).toString('hex');
   const STATIC_ROOT = opts.staticRoot || null; // dev/test only; in production Caddy serves the menu
@@ -110,36 +115,36 @@ function createApp(opts = {}) {
   }
   function newSession(kind, id, ttlMs) {
     const token = crypto.randomBytes(32).toString('base64url');
-    db.prepare('DELETE FROM sessions WHERE expires<?').run(now());
-    db.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(sha(token), kind, id, now() + ttlMs);
+    Q('DELETE FROM sessions WHERE expires<?').run(now());
+    Q('INSERT INTO sessions VALUES(?,?,?,?)').run(sha(token), kind, id, now() + ttlMs);
     return token;
   }
   function sessionOf(req, kind) {
     const t = cookies(req)[kind === 'staff' ? 'sq_staff' : 'sq_card'];
     if (!t || t.length > 100) return null;
-    return db.prepare('SELECT * FROM sessions WHERE token_hash=? AND kind=? AND expires>?').get(sha(t), kind, now()) || null;
+    return Q('SELECT * FROM sessions WHERE token_hash=? AND kind=? AND expires>?').get(sha(t), kind, now()) || null;
   }
   function audit(actorType, actorId, action, customerId, detail, ctx) {
-    db.prepare('INSERT INTO audit_log(at,actor_type,actor_id,action,customer_id,detail,ip,device) VALUES(?,?,?,?,?,?,?,?)')
+    Q('INSERT INTO audit_log(at,actor_type,actor_id,action,customer_id,detail,ip,device) VALUES(?,?,?,?,?,?,?,?)')
       .run(now(), actorType, actorId ?? null, action, customerId ?? null, detail ? JSON.stringify(detail) : null, ctx.ip, ctx.device);
   }
   function card(customer) {
-    const stamps = db.prepare('SELECT created_at, cycle_id FROM stamps WHERE customer_id=? AND cycle_id=?').all(customer.id, customer.cycle);
-    const last = db.prepare('SELECT MAX(created_at) AS t FROM stamps WHERE customer_id=?').get(customer.id).t;
+    const stamps = Q('SELECT created_at, cycle_id FROM stamps WHERE customer_id=? AND cycle_id=?').all(customer.id, customer.cycle);
+    const last = Q('SELECT MAX(created_at) AS t FROM stamps WHERE customer_id=?').get(customer.id).t;
     if (last && !stamps.some(s => s.created_at === last)) stamps.push({ created_at: last, cycle_id: -1 }); // cooldown spans cycles
     const st = R.cardState(stamps, customer.cycle, now(), CFG);
-    st.rewards = db.prepare('SELECT COUNT(*) AS n FROM rewards WHERE customer_id=?').get(customer.id).n;
+    st.rewards = Q('SELECT COUNT(*) AS n FROM rewards WHERE customer_id=?').get(customer.id).n;
     st.rewardName = CFG.REWARD_NAME;
     return st;
   }
   function ops(customerId, before, limit = 10) {
-    const rows = db.prepare(`SELECT a.id, a.at, a.action, a.detail, s.name AS staff FROM audit_log a LEFT JOIN staff s ON s.id=a.actor_id AND a.actor_type='staff'
+    const rows = Q(`SELECT a.id, a.at, a.action, a.detail, s.name AS staff FROM audit_log a LEFT JOIN staff s ON s.id=a.actor_id AND a.actor_type='staff'
       WHERE a.customer_id=? AND a.action IN('stamp','redeem') AND a.id<? ORDER BY a.id DESC LIMIT ?`).all(customerId, before || 2 ** 53, limit + 1);
     return { items: rows.slice(0, limit).map(r => ({ id: r.id, at: r.at, action: r.action, staff: r.staff, table: (JSON.parse(r.detail || '{}')).table ?? null })), more: rows.length > limit };
   }
   function loginCustomer(phone, t, ctx, via) {
-    db.prepare('INSERT INTO customers(phone,created_at,last_visit_at) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET last_visit_at=excluded.last_visit_at').run(phone, t, t);
-    const c = db.prepare('SELECT * FROM customers WHERE phone=?').get(phone);
+    Q('INSERT INTO customers(phone,created_at,last_visit_at) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET last_visit_at=excluded.last_visit_at').run(phone, t, t);
+    const c = Q('SELECT * FROM customers WHERE phone=?').get(phone);
     const ttl = CFG.CUSTOMER_SESSION_DAYS * 24 * H;
     const token = newSession('customer', c.id, ttl);
     audit('customer', c.id, 'login', c.id, { via }, ctx);
@@ -168,7 +173,7 @@ function createApp(opts = {}) {
     if (!incoming || !inboxOk || !m) return send(res, 200, { ok: true, ignored: true });
     const phone = R.normalizePhone(ev.sender?.phone_number || ev.conversation?.meta?.sender?.phone_number || '');
     if (!phone || limited('hook:' + phone, 10, H, t)) return send(res, 200, { ok: true, ignored: true });
-    const r = db.prepare('UPDATE inbound_logins SET phone=? WHERE code=? AND expires>? AND phone IS NULL').run(phone, m[1], t);
+    const r = Q('UPDATE inbound_logins SET phone=? WHERE code=? AND expires>? AND phone IS NULL').run(phone, m[1], t);
     if (r.changes) audit('customer', null, 'whatsapp_verified', null, { phone: R.maskPhone(phone) }, ctx);
     return send(res, 200, { ok: true });
   }
@@ -187,8 +192,8 @@ function createApp(opts = {}) {
   const REPORT = opts.report || { url: process.env.REPORT_SHEET_URL || '', token: process.env.REPORT_SHEET_TOKEN || '' };
   const CALL_HISTORY_MS = 12 * H;
   function addCall(msg, t) {
-    if (Math.random() < 0.02) db.prepare('DELETE FROM calls WHERE at<?').run(t - 2 * CALL_HISTORY_MS);
-    const id = Number(db.prepare('INSERT INTO calls(at,table_number,body) VALUES(?,?,?)').run(t, +msg.table, JSON.stringify(msg)).lastInsertRowid);
+    if (Math.random() < 0.02) Q('DELETE FROM calls WHERE at<?').run(t - 2 * CALL_HISTORY_MS);
+    const id = Number(Q('INSERT INTO calls(at,table_number,body) VALUES(?,?,?)').run(t, +msg.table, JSON.stringify(msg)).lastInsertRowid);
     publish('calls', 'msg', { id, time: t, body: msg });
     return id;
   }
@@ -216,12 +221,12 @@ function createApp(opts = {}) {
     if (p === '/otp/request' && M === 'POST') {
       const b = await readBody(req); const phone = R.normalizePhone(b.phone);
       if (!phone) return send(res, 400, { error: 'phone' });
-      const prev = db.prepare('SELECT sent_at FROM otps WHERE phone=?').get(phone);
+      const prev = Q('SELECT sent_at FROM otps WHERE phone=?').get(phone);
       if (prev && t - prev.sent_at < CFG.OTP_RESEND_SEC * 1000) return send(res, 429, { error: 'wait', retryIn: Math.ceil((CFG.OTP_RESEND_SEC * 1000 - (t - prev.sent_at)) / 1000) });
       if (limited('ip:' + ctx.ip, CFG.OTP_MAX_PER_IP_HOUR, H, t) || limited('ph:' + phone, CFG.OTP_MAX_PER_PHONE_HOUR, H, t))
         return send(res, 429, { error: 'rate' });
       const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
-      db.prepare('INSERT INTO otps(phone,code_hash,expires,attempts,sent_at) VALUES(?,?,?,0,?) ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash, expires=excluded.expires, attempts=0, sent_at=excluded.sent_at')
+      Q('INSERT INTO otps(phone,code_hash,expires,attempts,sent_at) VALUES(?,?,?,0,?) ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash, expires=excluded.expires, attempts=0, sent_at=excluded.sent_at')
         .run(phone, otpHash(phone, code), t + CFG.OTP_TTL_MIN * 60e3, t);
       try { await sendOtp(phone, code); } catch (e) { console.error('otp send failed', e.message); return send(res, 502, { error: 'send' }); }
       audit('customer', null, 'otp_request', null, { phone: R.maskPhone(phone) }, ctx);
@@ -230,12 +235,12 @@ function createApp(opts = {}) {
     if (p === '/otp/verify' && M === 'POST') {
       const b = await readBody(req); const phone = R.normalizePhone(b.phone); const code = String(b.code ?? '');
       if (limited('vip:' + ctx.ip, 40, H, t)) return send(res, 429, { error: 'rate' });
-      const row = phone && db.prepare('SELECT * FROM otps WHERE phone=?').get(phone);
+      const row = phone && Q('SELECT * FROM otps WHERE phone=?').get(phone);
       const bad = () => send(res, 400, { error: 'code' }); // one generic error for every failure
-      if (!row || row.expires < t || row.attempts >= CFG.OTP_MAX_ATTEMPTS || !/^\d{6}$/.test(code)) { if (row) db.prepare('UPDATE otps SET attempts=attempts+1 WHERE phone=?').run(phone); return bad(); }
+      if (!row || row.expires < t || row.attempts >= CFG.OTP_MAX_ATTEMPTS || !/^\d{6}$/.test(code)) { if (row) Q('UPDATE otps SET attempts=attempts+1 WHERE phone=?').run(phone); return bad(); }
       const ok = crypto.timingSafeEqual(Buffer.from(otpHash(phone, code), 'hex'), Buffer.from(row.code_hash, 'hex'));
-      if (!ok) { db.prepare('UPDATE otps SET attempts=attempts+1 WHERE phone=?').run(phone); return bad(); }
-      db.prepare('DELETE FROM otps WHERE phone=?').run(phone);
+      if (!ok) { Q('UPDATE otps SET attempts=attempts+1 WHERE phone=?').run(phone); return bad(); }
+      Q('DELETE FROM otps WHERE phone=?').run(phone);
       return send(res, 200, { ok: true }, { 'Set-Cookie': loginCustomer(phone, t, ctx, 'otp') });
     }
 
@@ -244,13 +249,13 @@ function createApp(opts = {}) {
     if (p === '/otp/inbound/start' && M === 'POST') {
       if (!INBOUND) return send(res, 404, { error: 'not found' });
       if (limited('ib:' + ctx.ip, CFG.OTP_MAX_PER_IP_HOUR, H, t)) return send(res, 429, { error: 'rate' });
-      db.prepare('DELETE FROM inbound_logins WHERE expires<?').run(t);
+      Q('DELETE FROM inbound_logins WHERE expires<?').run(t);
       let code;
       do code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
-      while (db.prepare('SELECT 1 FROM inbound_logins WHERE code=?').get(code));
+      while (Q('SELECT 1 FROM inbound_logins WHERE code=?').get(code));
       const nonce = crypto.randomBytes(32).toString('base64url');
       const ttl = CFG.OTP_TTL_MIN * 60e3;
-      db.prepare('INSERT INTO inbound_logins(nonce_hash,code,expires,phone,created_at) VALUES(?,?,?,NULL,?)').run(sha(nonce), code, t + ttl, t);
+      Q('INSERT INTO inbound_logins(nonce_hash,code,expires,phone,created_at) VALUES(?,?,?,NULL,?)').run(sha(nonce), code, t + ttl, t);
       const text = 'SEQ-' + code;
       return send(res, 200, { code: text, wa: `https://wa.me/${INBOUND.waNumber}?text=${encodeURIComponent(text)}`, expiresIn: ttl / 1000 },
         { 'Set-Cookie': cookie('sq_pending', nonce, ttl / 1000, 'Strict') });
@@ -258,10 +263,10 @@ function createApp(opts = {}) {
     if (p === '/otp/inbound/status' && M === 'GET') {
       if (!INBOUND) return send(res, 404, { error: 'not found' });
       const n = cookies(req).sq_pending;
-      const row = n && n.length < 100 && db.prepare('SELECT * FROM inbound_logins WHERE nonce_hash=?').get(sha(n));
+      const row = n && n.length < 100 && Q('SELECT * FROM inbound_logins WHERE nonce_hash=?').get(sha(n));
       if (!row || row.expires < t) return send(res, 410, { error: 'expired' });
       if (!row.phone) return send(res, 200, { pending: true });
-      db.prepare('DELETE FROM inbound_logins WHERE nonce_hash=?').run(row.nonce_hash);
+      Q('DELETE FROM inbound_logins WHERE nonce_hash=?').run(row.nonce_hash);
       return send(res, 200, { ok: true }, { 'Set-Cookie': [loginCustomer(row.phone, t, ctx, 'whatsapp'), cookie('sq_pending', '', 0, 'Strict')] });
     }
 
@@ -281,17 +286,17 @@ function createApp(opts = {}) {
     if (p.startsWith('/me')) {
       const s = sessionOf(req, 'customer');
       if (!s) return send(res, 401, { error: 'login' });
-      const c = db.prepare('SELECT * FROM customers WHERE id=?').get(s.subject_id);
+      const c = Q('SELECT * FROM customers WHERE id=?').get(s.subject_id);
       if (!c) return send(res, 401, { error: 'login' });
       if (p === '/me' && M === 'GET') {
         const tn = tableNo(url.searchParams.get('table'));
-        if (tn && tableOk(tn, url.searchParams.get('s'))) { db.prepare('INSERT INTO presence VALUES(?,?,?) ON CONFLICT(customer_id) DO UPDATE SET table_number=excluded.table_number, at=excluded.at').run(c.id, tn, t); publish('staff', 'presence', {}); }
+        if (tn && tableOk(tn, url.searchParams.get('s'))) { Q('INSERT INTO presence VALUES(?,?,?) ON CONFLICT(customer_id) DO UPDATE SET table_number=excluded.table_number, at=excluded.at').run(c.id, tn, t); publish('staff', 'presence', {}); }
         return send(res, 200, { phone: c.phone, card: card(c) });
       }
       if (p === '/me/stream' && M === 'GET') return stream(req, res, 'c:' + c.id);
       if (p === '/me/logout' && M === 'POST') {
-        db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_card));
-        db.prepare('DELETE FROM presence WHERE customer_id=?').run(c.id);
+        Q('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_card));
+        Q('DELETE FROM presence WHERE customer_id=?').run(c.id);
         return send(res, 200, { ok: true }, { 'Set-Cookie': cookie('sq_card', '', 0, 'Lax') });
       }
       return send(res, 404, { error: 'not found' });
@@ -301,7 +306,7 @@ function createApp(opts = {}) {
     if (p === '/staff/login' && M === 'POST') {
       if (limited('slip:' + ctx.ip, 10, 15 * 60e3, t)) return send(res, 429, { error: 'rate' });
       const b = await readBody(req);
-      const u = db.prepare('SELECT * FROM staff WHERE username=? AND active=1').get(String(b.username ?? '').trim().toLowerCase().slice(0, 60));
+      const u = Q('SELECT * FROM staff WHERE username=? AND active=1').get(String(b.username ?? '').trim().toLowerCase().slice(0, 60));
       if (!u || !checkPass(String(b.password ?? '').slice(0, 200), u.pass)) { audit('staff', u?.id, 'login_failed', null, null, ctx); return send(res, 401, { error: 'creds' }); }
       const ttl = CFG.STAFF_SESSION_HOURS * H;
       audit('staff', u.id, 'login', null, null, ctx);
@@ -309,17 +314,17 @@ function createApp(opts = {}) {
     }
     if (!p.startsWith('/staff/')) return send(res, 404, { error: 'not found' });
     const ss = sessionOf(req, 'staff');
-    const staff = ss && db.prepare('SELECT * FROM staff WHERE id=? AND active=1').get(ss.subject_id);
+    const staff = ss && Q('SELECT * FROM staff WHERE id=? AND active=1').get(ss.subject_id);
     if (!staff) return send(res, 401, { error: 'login' });
 
     if (p === '/staff/me' && M === 'GET') return send(res, 200, { name: staff.name, role: staff.role, rules: { required: CFG.STAMPS_REQUIRED, reward: CFG.REWARD_NAME, hours: CFG.MIN_HOURS_BETWEEN_STAMPS } });
-    if (p === '/staff/logout' && M === 'POST') { db.prepare('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_staff)); return send(res, 200, { ok: true }, { 'Set-Cookie': cookie('sq_staff', '', 0, 'Strict') }); }
+    if (p === '/staff/logout' && M === 'POST') { Q('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_staff)); return send(res, 200, { ok: true }, { 'Set-Cookie': cookie('sq_staff', '', 0, 'Strict') }); }
     if (p === '/staff/stream' && M === 'GET') return stream(req, res, 'staff');
 
     // captain screen: live table calls (replays the last 12 h on connect) and took/undo updates
     if (p === '/staff/calls/stream' && M === 'GET') {
       stream(req, res, 'calls');
-      for (const r of db.prepare('SELECT id, at, body FROM calls WHERE at>? ORDER BY id').all(t - CALL_HISTORY_MS))
+      for (const r of Q('SELECT id, at, body FROM calls WHERE at>? ORDER BY id').all(t - CALL_HISTORY_MS))
         res.write(`event: msg\ndata: ${JSON.stringify({ id: r.id, time: r.at, body: JSON.parse(r.body) })}\n\n`);
       return;
     }
@@ -348,12 +353,12 @@ function createApp(opts = {}) {
 
     // customers signed in at a table in the last 3 hours (masked phones)
     if (p === '/staff/tables' && M === 'GET') {
-      const rows = db.prepare('SELECT p.table_number, p.at, c.id, c.phone, c.cycle FROM presence p JOIN customers c ON c.id=p.customer_id WHERE p.at>? ORDER BY p.table_number').all(t - 3 * H);
+      const rows = Q('SELECT p.table_number, p.at, c.id, c.phone, c.cycle FROM presence p JOIN customers c ON c.id=p.customer_id WHERE p.at>? ORDER BY p.table_number').all(t - 3 * H);
       return send(res, 200, rows.map(r => ({ id: r.id, table: r.table_number, phone: R.maskPhone(r.phone), card: card(r) })));
     }
     if (p === '/staff/customer' && M === 'GET') {
       const id = +url.searchParams.get('id'); const phone = R.normalizePhone(url.searchParams.get('phone'));
-      const c = phone ? db.prepare('SELECT * FROM customers WHERE phone=?').get(phone) : Number.isInteger(id) && id > 0 ? db.prepare('SELECT * FROM customers WHERE id=?').get(id) : null;
+      const c = phone ? Q('SELECT * FROM customers WHERE phone=?').get(phone) : Number.isInteger(id) && id > 0 ? Q('SELECT * FROM customers WHERE id=?').get(id) : null;
       if (!c) return send(res, 404, { error: 'none' });
       return send(res, 200, { id: c.id, phone: phone ? c.phone : R.maskPhone(c.phone), card: card(c), ops: ops(c.id, +url.searchParams.get('before') || 0) });
     }
@@ -363,27 +368,27 @@ function createApp(opts = {}) {
       if (limited('act:' + staff.id, 60, 60e3, t)) return send(res, 429, { error: 'rate' });
       const isStamp = p === '/staff/stamp';
       // idempotent: the same requestId returns the original result
-      const dup = db.prepare(`SELECT customer_id FROM ${isStamp ? 'stamps' : 'rewards'} WHERE request_id=?`).get(rid);
-      if (dup) { const c0 = db.prepare('SELECT * FROM customers WHERE id=?').get(dup.customer_id); return send(res, 200, { ok: true, repeated: true, card: card(c0) }); }
+      const dup = Q(`SELECT customer_id FROM ${isStamp ? 'stamps' : 'rewards'} WHERE request_id=?`).get(rid);
+      if (dup) { const c0 = Q('SELECT * FROM customers WHERE id=?').get(dup.customer_id); return send(res, 200, { ok: true, repeated: true, card: card(c0) }); }
       let result;
       db.exec('BEGIN IMMEDIATE');
       try {
-        const c = db.prepare('SELECT * FROM customers WHERE id=?').get(cid);
+        const c = Q('SELECT * FROM customers WHERE id=?').get(cid);
         if (!c) { db.exec('ROLLBACK'); return send(res, 404, { error: 'none' }); }
         const st = card(c);
         const block = isStamp ? R.stampBlock(st) : R.redeemBlock(st);
         if (block) { db.exec('ROLLBACK'); return send(res, 409, { error: block, card: st }); }
-        const table = tableNo(b.table) ?? db.prepare('SELECT table_number FROM presence WHERE customer_id=? AND at>?').get(cid, t - 3 * H)?.table_number ?? null;
+        const table = tableNo(b.table) ?? Q('SELECT table_number FROM presence WHERE customer_id=? AND at>?').get(cid, t - 3 * H)?.table_number ?? null;
         if (isStamp) {
-          db.prepare('INSERT INTO stamps(customer_id,staff_id,table_number,created_at,cycle_id,request_id) VALUES(?,?,?,?,?,?)').run(cid, staff.id, table, t, c.cycle, rid);
-          db.prepare('UPDATE customers SET last_visit_at=? WHERE id=?').run(t, cid);
+          Q('INSERT INTO stamps(customer_id,staff_id,table_number,created_at,cycle_id,request_id) VALUES(?,?,?,?,?,?)').run(cid, staff.id, table, t, c.cycle, rid);
+          Q('UPDATE customers SET last_visit_at=? WHERE id=?').run(t, cid);
         } else {
-          db.prepare('INSERT INTO rewards(customer_id,staff_id,redeemed_at,cycle_id,request_id) VALUES(?,?,?,?,?)').run(cid, staff.id, t, c.cycle, rid);
-          db.prepare('UPDATE customers SET cycle=cycle+1 WHERE id=?').run(cid);
+          Q('INSERT INTO rewards(customer_id,staff_id,redeemed_at,cycle_id,request_id) VALUES(?,?,?,?,?)').run(cid, staff.id, t, c.cycle, rid);
+          Q('UPDATE customers SET cycle=cycle+1 WHERE id=?').run(cid);
         }
         audit('staff', staff.id, isStamp ? 'stamp' : 'redeem', cid, { table, cycle: c.cycle }, ctx);
         db.exec('COMMIT');
-        result = card(db.prepare('SELECT * FROM customers WHERE id=?').get(cid));
+        result = card(Q('SELECT * FROM customers WHERE id=?').get(cid));
       } catch (e) { try { db.exec('ROLLBACK'); } catch {} if (/UNIQUE/.test(e.message)) return send(res, 409, { error: 'duplicate' }); throw e; }
       publish('c:' + cid, 'card', result); publish('staff', 'card', { id: cid });
       return send(res, 200, { ok: true, card: result });
@@ -413,7 +418,7 @@ function createApp(opts = {}) {
   function setStaff(username, role, name, password) {
     if (!['captain', 'admin'].includes(role)) throw new Error('role must be captain or admin');
     const pw = password || crypto.randomBytes(6).toString('base64url');
-    db.prepare(`INSERT INTO staff(username,name,pass,role) VALUES(?,?,?,?) ON CONFLICT(username) DO UPDATE SET pass=excluded.pass, role=excluded.role, name=excluded.name, active=1`)
+    Q(`INSERT INTO staff(username,name,pass,role) VALUES(?,?,?,?) ON CONFLICT(username) DO UPDATE SET pass=excluded.pass, role=excluded.role, name=excluded.name, active=1`)
       .run(username.toLowerCase(), name || username, hashPass(pw), role);
     return pw;
   }
