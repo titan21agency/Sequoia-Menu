@@ -84,6 +84,8 @@ function fromEnv(env = process.env) {
     return metaCloud({ token: env.WHATSAPP_TOKEN, phoneId: env.WHATSAPP_PHONE_ID, template: env.WHATSAPP_TEMPLATE || 'sequoia_otp' });
   if (env.WHATSAPP_PROVIDER === 'messagepro')
     return messagePro({ token: env.MESSAGEPRO_TOKEN, accountId: env.MESSAGEPRO_ACCOUNT_ID, inboxId: env.MESSAGEPRO_INBOX_ID, base: env.MESSAGEPRO_BASE || undefined });
+  // 'off': phone-code login is unavailable (e.g. until the Message Pro token is set); everything else runs.
+  if (env.WHATSAPP_PROVIDER === 'off') return async () => { throw new Error('otp provider off'); };
   if (env.NODE_ENV === 'production') throw new Error('otp: set WHATSAPP_PROVIDER in production (dev stub would only log codes)');
   return devStub();
 }
