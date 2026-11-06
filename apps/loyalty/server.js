@@ -36,6 +36,10 @@ function hashPass(p) { const salt = crypto.randomBytes(16); return salt.toString
 function checkPass(p, stored) { const [s, h] = String(stored).split(':'); const c = crypto.scryptSync(String(p), Buffer.from(s, 'hex'), 64); return crypto.timingSafeEqual(c, Buffer.from(h, 'hex')); }
 const sha = s => crypto.createHash('sha256').update(s).digest('hex');
 
+// Secrets saved from the one-time setup page (never in git, chat or the env file): <LOYALTY_DATA>/settings.json, mode 600.
+function readSettings(file) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return {}; } }
+function writeSettings(file, data) { fs.writeFileSync(file + '.tmp', JSON.stringify(data), { mode: 0o600 }); fs.renameSync(file + '.tmp', file); }
+
 function inboundFromEnv(env = process.env) {
   const secret = env.MESSAGEPRO_WEBHOOK_SECRET, waNumber = String(env.SEQUOIA_WA_NUMBER || '').replace(/\D/g, '');
   if (!secret || !waNumber) return null;
@@ -60,7 +64,7 @@ function createApp(opts = {}) {
   // prepared-statement cache: compiling SQL on every request was the main CPU cost
   const stmts = new Map();
   const Q = sql => { let st = stmts.get(sql); if (!st) { st = db.prepare(sql); stmts.set(sql, st); } return st; };
-  const sendOtp = opts.sendOtp || OTP.fromEnv();
+  let sendOtp = opts.sendOtp || OTP.fromEnv();
   const SECRET = opts.secret || process.env.LOYALTY_SECRET || crypto.randomBytes(32).toString('hex');
   const STATIC_ROOT = opts.staticRoot || null; // dev/test only; in production Caddy serves the menu
   const secure = opts.secureCookies !== false;
@@ -69,7 +73,7 @@ function createApp(opts = {}) {
 
   const otpHash = (phone, code) => crypto.createHmac('sha256', SECRET).update(phone + ':' + code).digest('hex');
   // Option B (WhatsApp inbound login): enabled when the webhook secret and the café's WhatsApp number are set.
-  const INBOUND = opts.inbound !== undefined ? opts.inbound : inboundFromEnv();
+  let INBOUND = opts.inbound !== undefined ? opts.inbound : inboundFromEnv();
 
   // ---------- live updates (SSE): channel 'c:<customerId>' for the customer card, 'staff' for the captain tab ----------
   const subs = new Map();
@@ -215,6 +219,36 @@ function createApp(opts = {}) {
       if (req.headers['x-requested-with'] !== 'sequoia') return send(res, 403, { error: 'forbidden' });
       const origin = req.headers.origin;
       if (origin && new URL(origin).host !== req.headers.host) return send(res, 403, { error: 'forbidden' });
+    }
+
+    // ----- one-time setup page: owner pastes the Message Pro token + webhook secret (browser -> server only) -----
+    if (p === '/setup/messagepro' && M === 'POST') {
+      if (!opts.settingsFile) return send(res, 404, { error: 'not found' });
+      if (limited('setup:' + ctx.ip, 10, H, t)) return send(res, 429, { error: 'rate' });
+      const b = await readBody(req); const st = readSettings(opts.settingsFile);
+      const code = String(b.code || '');
+      const good = st.setup && st.setup.exp > t && code.length >= 20 && code.length <= 100 &&
+        crypto.timingSafeEqual(Buffer.from(sha(code), 'hex'), Buffer.from(st.setup.hash, 'hex'));
+      if (!good) { audit('system', null, 'setup_denied', null, null, ctx); return send(res, 403, { error: 'link' }); }
+      const token = String(b.token || '').trim(), secret = String(b.webhookSecret || '').trim();
+      if (!/^[!-~]{10,400}$/.test(token)) return send(res, 400, { error: 'token' });
+      if (secret && !/^[!-~]{8,400}$/.test(secret)) return send(res, 400, { error: 'secret' });
+      const base = process.env.MESSAGEPRO_BASE || 'https://omni.message-pro.com', acct = process.env.MESSAGEPRO_ACCOUNT_ID || '129';
+      let chk;
+      try { chk = await (opts.fetchImpl || fetch)(`${base}/api/v1/accounts/${encodeURIComponent(acct)}/integrations/developer_api/channels`, { headers: { api_access_token: token, Accept: 'application/json' }, signal: AbortSignal.timeout(10000) }); }
+      catch { return send(res, 502, { error: 'platform' }); }
+      if (!chk.ok) return send(res, 400, { error: 'token-rejected', status: chk.status });
+      const add = { WHATSAPP_PROVIDER: 'messagepro', MESSAGEPRO_TOKEN: token, ...(secret ? { MESSAGEPRO_WEBHOOK_SECRET: secret } : {}),
+        MESSAGEPRO_ACCOUNT_ID: acct, MESSAGEPRO_INBOX_ID: process.env.MESSAGEPRO_INBOX_ID || '147' };
+      const nextEnv = { ...process.env, ...add };
+      const nextOtp = OTP.fromEnv(nextEnv); // build before saving, so a bad config never gets stored
+      st.env = { ...(st.env || {}), ...add };
+      delete st.setup; writeSettings(opts.settingsFile, st);
+      Object.assign(process.env, add);
+      if (!opts.sendOtp) sendOtp = nextOtp;
+      if (opts.inbound === undefined) INBOUND = inboundFromEnv(process.env);
+      audit('system', null, 'setup_messagepro', null, { webhook: !!secret }, ctx);
+      return send(res, 200, { ok: true, code: true, whatsappMessage: !!INBOUND });
     }
 
     // ----- customer: OTP login -----
@@ -433,7 +467,10 @@ if (require.main === module) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const dev = process.env.NODE_ENV !== 'production';
   if (!dev && !process.env.LOYALTY_SECRET) { console.error('LOYALTY_SECRET is required in production'); process.exit(1); }
+  const SETTINGS = path.join(DATA_DIR, 'settings.json');
+  Object.assign(process.env, readSettings(SETTINGS).env || {}); // secrets saved from the setup page win over the env file
   const app = createApp({
+    settingsFile: SETTINGS,
     dbFile: path.join(DATA_DIR, 'loyalty.db'),
     staticRoot: process.env.STATIC_ROOT ? path.resolve(process.env.STATIC_ROOT) : null,
     secureCookies: !dev,
@@ -443,6 +480,13 @@ if (require.main === module) {
     if (!username) { console.log('usage: node server.js set-staff <username> <captain|admin> "<name>" [password]'); process.exit(1); }
     console.log(`User: ${username}\nPassword: ${app.setStaff(username, role, name, pw)}\nRole: ${role}`);
     process.exit(0);
+  }
+  if (process.argv[2] === 'setup-link') {
+    const base = process.argv[3];
+    if (!base) { console.log('usage: node server.js setup-link https://<menu domain>/   (one use, 24 h)'); process.exit(1); }
+    const code = crypto.randomBytes(24).toString('base64url'); const st = readSettings(SETTINGS);
+    st.setup = { hash: sha(code), exp: Date.now() + 24 * 3600e3 }; writeSettings(SETTINGS, st);
+    console.log(new URL('setup-messagepro.html#' + code, base).toString()); process.exit(0);
   }
   if (process.argv[2] === 'table-links') {
     const [, , , base, from = '1', to = from] = process.argv;

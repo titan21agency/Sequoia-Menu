@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Sequoia — ربط واتساب</title>
+<link rel="icon" type="image/png" href="assets/tree-navy.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;600;700&display=swap">
+<style>
+:root{--navy:#1F2A44;--navy-deep:#141B2D;--beige:#DACBB4;--cream:#F4EEE2;--accent:#B8432F;--ok:#7BC48A;--ease-out:cubic-bezier(0.23,1,0.32,1)}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--navy-deep)}
+body{font-family:'IBM Plex Sans Arabic',system-ui,sans-serif;color:var(--cream);background:var(--navy) url(assets/navy-texture-v2.webp) center/cover fixed;
+  display:flex;justify-content:center;padding:max(24px,env(safe-area-inset-top)) 16px 32px;-webkit-font-smoothing:antialiased}
+main{width:100%;max-width:440px;display:flex;flex-direction:column;gap:14px}
+.brand{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:6px}
+.brand img{width:26px;height:auto}
+.brand b{font-size:15px;letter-spacing:.24em;color:var(--beige)}
+h1{margin:0;font-size:26px;line-height:1.25;text-align:center}
+p{margin:0;color:var(--beige);line-height:1.6;font-size:15px}
+.card{background:rgba(20,27,45,.72);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);border:1px solid rgba(244,238,226,.14);border-radius:22px;padding:20px;display:flex;flex-direction:column;gap:14px}
+label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:15px}
+label small{font-weight:400;color:var(--beige);font-size:13px;line-height:1.5}
+input{height:52px;border-radius:14px;border:1.5px solid rgba(244,238,226,.3);background:rgba(244,238,226,.06);color:var(--cream);padding:0 14px;font:16px ui-monospace,SFMono-Regular,Menlo,monospace;direction:ltr;outline:none;transition:border-color 160ms ease}
+input:focus{border-color:var(--cream)}
+button{height:56px;border:0;border-radius:999px;background:var(--cream);color:var(--navy);font:700 17px 'IBM Plex Sans Arabic',system-ui,sans-serif;cursor:pointer;transition:transform 100ms var(--ease-out),opacity 160ms ease}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.55;cursor:default}
+.msg{min-height:22px;font-size:15px;line-height:1.5}
+.msg.err{color:#F2A08E}.msg.ok{color:var(--ok)}
+ol{margin:0;padding-inline-start:20px;color:var(--beige);line-height:1.7;font-size:14px}
+[hidden]{display:none!important}
+@media (prefers-reduced-transparency:reduce){.card{background:var(--navy-deep);backdrop-filter:none;-webkit-backdrop-filter:none}}
+@media (prefers-reduced-motion:reduce){button,input{transition:none}}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><img src="assets/tree-cream.webp" alt=""><b>SEQUOIA</b></div>
+  <h1>ربط واتساب بـ Message Pro</h1>
+  <p>الصفحة دي بتتفتح مرة واحدة بس. اللي هتكتبه بيروح للسيرفر على طول ومحدش بيشوفه.</p>
+
+  <form class="card" id="f" novalidate>
+    <label>توكن الـ API
+      <small>Message Pro ← Account settings ← Integrations ← Developer API ← Add Access Token</small>
+      <input id="token" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" required>
+    </label>
+    <label>سر الـ Webhook (اختياري)
+      <small>Integrations ← Webhooks ← Sequoia Card login. ده اللي بيشغّل الدخول برسالة واتساب.</small>
+      <input id="secret" type="password" autocomplete="off" spellcheck="false" autocapitalize="none">
+    </label>
+    <div class="msg" id="msg" role="alert"></div>
+    <button type="submit" id="go">احفظ وشغّل</button>
+  </form>
+
+  <section class="card" id="done" hidden>
+    <h1>تمام ✓</h1>
+    <p id="doneText"></p>
+    <ol>
+      <li>افتح المنيو واضغط على أيقونة حسابي.</li>
+      <li>اكتب رقمك واطلب الكود، هيوصلك على واتساب.</li>
+    </ol>
+  </section>
+</main>
+<script src="assets/setup.js"></script>
+</body>
+</html>
