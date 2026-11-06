@@ -41,15 +41,16 @@ function messagePro({ token, accountId, inboxId, base = 'https://omni.message-pr
   }
   const list = j => (Array.isArray(j?.payload) ? j.payload : Array.isArray(j) ? j : []);
 
+  // Account tokens may not use /contacts/search or list endpoints (403); /contacts/filter is allowed.
   async function findContact(e164) {
-    const r = await call('GET', '/contacts/search?include_contacts=true&q=' + encodeURIComponent(e164.slice(1)));
-    if (!r.ok) throw new Error('messagepro search ' + r.status);
+    const r = await call('POST', '/contacts/filter', { payload: [{ attribute_key: 'phone_number', filter_operator: 'equal_to', values: [e164], query_operator: null }] });
+    if (!r.ok) throw new Error('messagepro filter ' + r.status);
     return list(r.j).find(c => String(c.phone_number || '').replace(/\D/g, '') === e164.slice(1)) || null;
   }
   async function contactId(e164) {
     const found = await findContact(e164);
     if (found) return found.id;
-    const r = await call('POST', '/contacts', { name: e164, phone_number: e164 });
+    const r = await call('POST', '/contacts', { name: e164, phone_number: e164, inbox_id: inbox });
     if (r.ok) return (r.j.payload?.contact || r.j.payload || r.j).id;
     if (r.status === 422) { const again = await findContact(e164); if (again) return again.id; } // created in parallel
     throw new Error('messagepro contact ' + r.status);
