@@ -108,6 +108,10 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .pin[aria-invalid="true"]{border-color:var(--accent)}
 .gerr{min-height:22px;color:#F2A08E!important}
 .gbtn{width:200px;height:56px;border:0;border-radius:16px;background:var(--cream);color:var(--navy);font-size:18px;font-weight:700}
+.tabs{margin-top:16px;display:flex;gap:6px;padding:5px;border-radius:18px;background:rgba(20,27,45,.45);width:max-content;max-width:100%}
+.tab{height:48px;padding:0 22px;border:0;border-radius:14px;background:transparent;color:var(--beige);font-size:17px;font-weight:600}
+.tab[aria-selected="true"]{background:var(--cream);color:var(--navy)}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -128,8 +132,15 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
     <button class="press sound" id="sound" type="button">🔔 جرّب الصوت</button>
     <div class="status" id="status" role="status"><i></i><span>بيحاول يتصل…</span></div>
   </header>
+  <nav class="tabs" role="tablist" aria-label="أقسام الشاشة">
+    <button class="press tab" role="tab" id="t-orders" aria-selected="true" aria-controls="p-orders" type="button">طلبات الترابيزات</button>
+    <button class="press tab" role="tab" id="t-card" aria-selected="false" aria-controls="p-card" type="button">كارت سيكويا</button>
+  </nav>
+  <div id="p-orders" role="tabpanel" aria-labelledby="t-orders">
   <button class="press banner" id="banner" type="button">دوس هنا عشان تشغّل صوت التنبيه وتفضل الشاشة منوّرة</button>
   <main id="main" aria-live="polite"></main>
+  </div>
+  <div id="p-card" role="tabpanel" aria-labelledby="t-card" hidden></div>
 </div>
 
 <script src="assets/orders.js"></script>
@@ -419,6 +430,25 @@ function startApp() {
   flush();
 })();
 }
+
+// ---- Tabs: table calls (unchanged) | Sequoia Card (loaded on first open) ----
+(function () {
+  var tabs = { orders: document.getElementById('t-orders'), card: document.getElementById('t-card') };
+  var panes = { orders: document.getElementById('p-orders'), card: document.getElementById('p-card') };
+  var loaded = false;
+  function show(k) {
+    Object.keys(tabs).forEach(function (n) { tabs[n].setAttribute('aria-selected', String(n === k)); panes[n].hidden = n !== k; });
+    if (k === 'card' && !loaded) {
+      loaded = true;
+      var sc = document.createElement('script'); sc.src = 'assets/captain-card.js';
+      sc.onload = function () { SequoiaCaptainCard.mount(panes.card); };
+      sc.onerror = function () { loaded = false; panes.card.textContent = 'مقدرناش نفتح كارت سيكويا. جرّب تاني.'; };
+      document.head.appendChild(sc);
+    }
+  }
+  tabs.orders.addEventListener('click', function () { show('orders'); });
+  tabs.card.addEventListener('click', function () { show('card'); });
+})();
 
 // ---- PIN gate: asked once per device, then remembered ----
 (function () {
