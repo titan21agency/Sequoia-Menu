@@ -237,6 +237,10 @@ async function api(req, res, url) {
     } catch (e) { db.exec('ROLLBACK'); throw e; }
     return send(res, 200, { ok: true, saved });
   }
+  if (p === '/attendance/day' && M === 'GET') {
+    const date = url.searchParams.get('date'); if (!validDate(date)) return send(res, 400, { error: 'التاريخ غلط.' });
+    return send(res, 200, db.prepare('SELECT * FROM attendance WHERE date=?').all(date));
+  }
   if (p === '/attendance/shift' && M === 'POST') {
     if (!need('admin')) return; const b = await readBody(req); const before = getShift();
     if (!TIME_RE.test(str(b.start, 5))) return send(res, 400, { error: 'الوقت غلط.' });

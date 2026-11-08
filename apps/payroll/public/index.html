@@ -76,6 +76,8 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--accent-soft)}
 .lock{font-size:.8rem}
 .tabs{overflow-x:auto}
 #v-attendance{display:grid;gap:14px}
+.arr{cursor:default;white-space:nowrap}.arr-w{display:flex;gap:6px;align-items:center;min-height:34px}
+.arr-c{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}.arr-t{padding:3px 6px;width:auto}
 .att-crumbs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:2px}
 #v-profile>.att-crumbs{margin-bottom:14px}
 .att-crumbs nav{display:flex;gap:8px;align-items:center;color:var(--muted)}
@@ -144,7 +146,7 @@ dialog form{display:grid;gap:12px}dialog label{display:grid;gap:4px}dialog input
   <div class="note" id="adAuto"></div>
   <label class="note att-check"><input type="checkbox" id="adOv">تعديل عدد الساعات يدوي</label><input type="number" id="adHours" min="0" max="24" step="0.25" aria-label="عدد الساعات" hidden></div>
   <label class="note">ملاحظة<input id="adNote" maxlength="500"></label>
-  <div class="att-acts"><button type="button" class="danger" id="adClear">مسح اليوم</button><button type="button" id="adCancel">إلغاء</button><button class="pri" type="submit">حفظ</button></div></form></dialog>
+  <div class="att-acts"><button type="button" class="danger" id="adClear">مسح اليوم</button><button type="button" id="adCancel">إغلاق</button><button class="pri" type="submit">حفظ</button></div></form></dialog>
 <dialog id="shiftDlg" dir="rtl"><form id="shiftForm"><h2>الوردية</h2><div class="att-pair"><label class="note">بداية الوردية<input type="time" id="sdStart" required></label><label class="note">عدد الساعات<input type="number" id="sdHours" min="1" max="24" step="0.5" required></label></div>
   <div class="att-acts"><button type="button" id="sdCancel">إلغاء</button><button class="pri" type="submit">حفظ</button></div></form></dialog>
 <div id="toast" class="toast" hidden></div>
@@ -211,8 +213,8 @@ function renderTeam(){
     <button id="exp">تنزيل Excel (CSV)</button>
     ${can('admin')?`<button id="lockBtn">${locked()?'فتح الشهر':'اعتماد وقفل الشهر'}</button>`:''}
     ${can('admin')?'<button class="pri" id="addEmp">+ موظف جديد</button>':''}</div></div>
-  ${rows.length?`<div class="tblw"><table><thead><tr><th>الموظف</th><th>الأساسي</th><th>خصومات</th><th>سكور KPIs</th><th>نقاط</th><th>بونص</th><th>الصافي</th></tr></thead><tbody>
-  ${rows.map(({e,c})=>`<tr data-id="${e.id}"><td><b>${esc(e.name)}</b><div class="note">${esc(e.role)}</div></td><td>${fmt(c.base)}</td><td>${c.ded?'<span style="color:var(--bad)">-'+fmt(c.ded)+'</span>':'—'}</td><td>${c.hasRec?c.score.toFixed(0)+'% '+pill(c.score):'<span class="note">لم يُقيَّم</span>'}</td><td>${c.myPts}</td><td>${fmt(c.bonus)}</td><td><b>${fmt(c.net)}</b></td></tr>`).join('')}
+  ${rows.length?`<div class="tblw"><table><thead><tr><th>الموظف</th><th>وصل النهاردة</th><th>الأساسي</th><th>خصومات</th><th>سكور KPIs</th><th>نقاط</th><th>بونص</th><th>الصافي</th></tr></thead><tbody>
+  ${rows.map(({e,c})=>`<tr data-id="${e.id}"><td><b>${esc(e.name)}</b><div class="note">${esc(e.role)}</div></td><td class="arr" data-emp="${e.id}"></td><td>${fmt(c.base)}</td><td>${c.ded?'<span style="color:var(--bad)">-'+fmt(c.ded)+'</span>':'—'}</td><td>${c.hasRec?c.score.toFixed(0)+'% '+pill(c.score):'<span class="note">لم يُقيَّم</span>'}</td><td>${c.myPts}</td><td>${fmt(c.bonus)}</td><td><b>${fmt(c.net)}</b></td></tr>`).join('')}
   </tbody></table></div>`:`<div class="panel empty">لسه مفيش موظفين.${can('admin')?' اضغط "موظف جديد" وابدأ بأول بروفايل.':''}</div>`}</div>`;
   $('#exp').onclick=exportCSV;
   const ae=$('#addEmp');if(ae)ae.onclick=()=>{S.cur='new';show('profile')};
@@ -220,6 +222,7 @@ function renderTeam(){
   const lb=$('#lockBtn');if(lb)lb.onclick=()=>{lb.outerHTML=`<span class="confirm">${locked()?'تفتح الشهر للتعديل؟':'تقفل الشهر؟ مش هينفع حد يعدّل فيه.'} <button class="pri" id="lyes">تأكيد</button><button id="lno">إلغاء</button></span>`;
     $('#lyes').onclick=async()=>{await call('POST','/months',{month:m,locked:!locked()});toast(locked()?'اتفتح الشهر':'اتقفل الشهر');load()};$('#lno').onclick=render};
   document.querySelectorAll('#v-team tbody tr').forEach(tr=>tr.onclick=()=>{S.cur=+tr.dataset.id;show('profile')});
+  paintArrivals();
 }
 
 function renderProfile(){
@@ -419,9 +422,9 @@ $('#adStatus').onchange=()=>{const s=$('#adStatus').value;const t=attTimes(s);if
 $('#adIn').oninput=()=>{const i=$('#adIn').value,s=$('#adStatus');if(i&&['present','late'].includes(s.value))s.value=mins(i)>mins(A.shift.start)+ATT_GRACE?'late':'present';attDlgSync()};
 $('#adOut').oninput=attDlgSync;
 $('#adOv').onchange=()=>{attDlgSync();if($('#adOv').checked)$('#adHours').focus()};
-$('#adCancel').onclick=()=>$('#attDlg').close();
-$('#adClear').onclick=async()=>{await call('DELETE',`/attendance/${S.cur}/${A.date}`).then(()=>{$('#attDlg').close();toast('اتمسح');renderAttendance()}).catch(()=>{})};
-$('#attForm').onsubmit=async ev=>{ev.preventDefault();
+$('#adCancel').onclick=()=>$('#attDlg').close(); 
+$('#adClear').onclick=async()=>{clearTimeout(attTimer);await call('DELETE',`/attendance/${S.cur}/${A.date}`).then(()=>{$('#attDlg').close();toast('اتمسح');renderAttendance()}).catch(()=>{})};
+$('#attForm').onsubmit=async ev=>{ev.preventDefault();clearTimeout(attTimer);
   if($('#adOv').checked&&$('#adHours').value===''){toast('اكتب عدد الساعات');return}
   await call('POST','/attendance',{emp_id:S.cur,dates:[A.date],status:$('#adStatus').value,check_in:$('#adIn').value,check_out:$('#adOut').value,override_hours:$('#adOv').checked?$('#adHours').value:null,note:$('#adNote').value}).then(()=>{$('#attDlg').close();toast('اتحفظ');renderAttendance()}).catch(()=>{});
 };
@@ -432,6 +435,41 @@ function attRoute(){const m=location.hash.match(/^#\/employees\/(\d+)\/attendanc
 window.addEventListener('hashchange',attRoute);
 const renderProfileCore=renderProfile;
 renderProfile=function(){renderProfileCore();const v=$('#v-profile');if(S.emps[S.cur]&&!v.querySelector('.att-crumbs')){v.insertAdjacentHTML('afterbegin',empSubnav('profile'));bindSubnav(v)}};
+
+// ---------- team arrival box (saves on every change) ----------
+const ARR={rows:{},seq:0,day:''};
+const arrStatus=t=>mins(t)>mins(A.shift.start)+ATT_GRACE?'late':'present';
+async function paintArrivals(){
+  const cells=[...document.querySelectorAll('#v-team .arr')];if(!cells.length)return;
+  const day=toDs(new Date());const q=++ARR.seq;
+  const [rows,sh]=await Promise.all([call('GET','/attendance/day?date='+day),call('GET',`/attendance?emp=${cells[0].dataset.emp}&month=${day.slice(0,7)}`)]).catch(()=>[null,null]);
+  if(!rows||q!==ARR.seq)return;
+  A.shift=sh.shift;ARR.day=day;ARR.rows=Object.fromEntries(rows.map(r=>[r.emp_id,r]));
+  const ed=can('editor')&&!S.months[day.slice(0,7)]?.locked;
+  document.querySelectorAll('#v-team .arr').forEach(td=>{
+    td.onclick=ev=>ev.stopPropagation();
+    const emp=+td.dataset.emp,r=ARR.rows[emp],on=r&&['present','late','half'].includes(r.status);
+    td.innerHTML=`<div class="arr-w"><input type="checkbox" class="arr-c" aria-label="وصل النهاردة" ${on?'checked':''} ${ed?'':'disabled'}><input type="time" class="arr-t" aria-label="وقت الوصول" value="${r?.check_in||''}" ${ed&&on?'':'hidden'}>${r?attBadge(r):''}${!ed&&on&&r.check_in?`<span class="note">${r.check_in}</span>`:''}</div>`;
+    if(!ed)return;
+    td.querySelector('.arr-c').onchange=ev=>arrToggle(emp,ev.target.checked);
+    td.querySelector('.arr-t').onchange=ev=>{if(ev.target.value)arrSave(emp,ev.target.value)};
+  });
+}
+function arrSave(emp,time){
+  const r=ARR.rows[emp];const keep=r&&['present','late','half'].includes(r.status);
+  return call('POST','/attendance',{emp_id:emp,dates:[ARR.day],status:keep&&r.status==='half'?'half':arrStatus(time),check_in:time,check_out:keep?r.check_out:null,override_hours:keep?r.override_hours:null,note:r?.note||''}).then(()=>toast('اتسجل '+time)).catch(()=>{}).finally(paintArrivals);
+}
+function arrToggle(emp,on){
+  if(on){const n=new Date();return arrSave(emp,p2(n.getHours())+':'+p2(n.getMinutes()))}
+  const r=ARR.rows[emp];
+  if(r&&(r.check_out||r.override_hours!==null||r.note)&&!confirm('اليوم ده فيه انصراف أو ملاحظة. تمسحه؟')){paintArrivals();return}
+  return call('DELETE',`/attendance/${emp}/${ARR.day}`).then(()=>toast('اتشال')).catch(()=>{}).finally(paintArrivals);
+}
+// day popup: save each change without closing
+let attTimer=0;
+const attPayload=()=>({emp_id:S.cur,dates:[A.date],status:$('#adStatus').value,check_in:$('#adIn').value,check_out:$('#adOut').value,override_hours:$('#adOv').checked?$('#adHours').value:null,note:$('#adNote').value});
+$('#attForm').addEventListener('change',()=>{clearTimeout(attTimer);if($('#adOv').checked&&$('#adHours').value==='')return;
+  attTimer=setTimeout(()=>call('POST','/attendance',attPayload()).then(()=>{$('#adClear').hidden=false;toast('اتحفظ تلقائي');renderAttendance()}).catch(()=>{}),300)});
 
 function showLogin(){$('#app').hidden=true;$('#login').hidden=false;$('#lu').focus()}
 $('#loginForm').onsubmit=async ev=>{ev.preventDefault();$('#lerr').textContent='';
