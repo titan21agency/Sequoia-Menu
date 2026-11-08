@@ -21,8 +21,13 @@ CREATE TABLE IF NOT EXISTS points(id INTEGER PRIMARY KEY, month TEXT NOT NULL, e
 CREATE TABLE IF NOT EXISTS months(month TEXT PRIMARY KEY, bonus_budget REAL DEFAULT 0, locked INTEGER DEFAULT 0);
 CREATE TABLE IF NOT EXISTS settings(id INTEGER PRIMARY KEY CHECK(id=1), work_days REAL DEFAULT 26, absence REAL DEFAULT 1, late REAL DEFAULT 0.25, minor REAL DEFAULT 0.5, major REAL DEFAULT 1);
 INSERT OR IGNORE INTO settings(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS attendance(emp_id INTEGER NOT NULL, date TEXT NOT NULL, status TEXT NOT NULL CHECK(status IN('present','absent','late','leave','half')), check_in TEXT, check_out TEXT, override_hours REAL, note TEXT, by_user INTEGER, at INTEGER NOT NULL, PRIMARY KEY(emp_id,date));
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, user_id INTEGER, user_name TEXT, action TEXT NOT NULL, entity TEXT NOT NULL, label TEXT, before TEXT, after TEXT);
 `);
+
+const settingCols = db.prepare('PRAGMA table_info(settings)').all().map(c => c.name);
+if (!settingCols.includes('shift_start')) db.exec("ALTER TABLE settings ADD COLUMN shift_start TEXT DEFAULT '09:00'");
+if (!settingCols.includes('shift_hours')) db.exec('ALTER TABLE settings ADD COLUMN shift_hours REAL DEFAULT 8');
 
 // ---------- passwords & sessions ----------
 function hashPass(p) { const salt = crypto.randomBytes(16); const h = crypto.scryptSync(p, salt, 64); return salt.toString('hex') + ':' + h.toString('hex'); }
@@ -74,6 +79,23 @@ function diff(before, after) { // keep only changed fields
   return Object.keys(a).length ? [b, a] : [null, null];
 }
 const isLocked = m => !!db.prepare('SELECT locked FROM months WHERE month=?').get(m)?.locked;
+const ATT_STATUS = ['present', 'absent', 'late', 'leave', 'half'];
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const validDate = d => typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d) && !isNaN(Date.parse(d + 'T00:00:00Z')) && new Date(d + 'T00:00:00Z').toISOString().slice(0, 10) === d;
+const getShift = () => { const r = db.prepare('SELECT shift_start,shift_hours FROM settings WHERE id=1').get(); return { start: r.shift_start, hours: r.shift_hours }; };
+const round2 = n => Math.round(n * 100) / 100;
+function attRow(r, shift) { // adds worked hours (override wins) and the difference from the expected shift
+  let auto = null;
+  if (r.check_in && r.check_out) {
+    const toMin = t => +t.slice(0, 2) * 60 + +t.slice(3);
+    let m = toMin(r.check_out) - toMin(r.check_in); if (m < 0) m += 1440; // overnight shift
+    auto = round2(m / 60);
+  }
+  const hours = r.override_hours ?? auto;
+  const expected = r.status === 'half' ? shift.hours / 2 : (r.status === 'present' || r.status === 'late') ? shift.hours : 0;
+  const diff = hours === null || !expected ? null : round2(hours - expected);
+  return { ...r, auto_hours: auto, hours, expected, diff };
+}
 const empName = id => db.prepare('SELECT name FROM employees WHERE id=?').get(id)?.name || '#' + id;
 
 // ---------- login rate limit ----------
@@ -179,6 +201,57 @@ async function api(req, res, url) {
     const d = { work_days: num(b.work_days, 1, 31), absence: num(b.absence, 0, 10), late: num(b.late, 0, 10), minor: num(b.minor, 0, 10), major: num(b.major, 0, 10) };
     db.prepare('UPDATE settings SET work_days=?,absence=?,late=?,minor=?,major=? WHERE id=1').run(d.work_days, d.absence, d.late, d.minor, d.major);
     const [bf, af] = diff(before, d); if (af) audit(user, 'update', 'settings', 'قواعد الخصم', bf, af); return send(res, 200, { ok: true });
+  }
+
+  // ---------- attendance ----------
+  if (p === '/attendance' && M === 'GET') {
+    const emp = +url.searchParams.get('emp'), m = url.searchParams.get('month') || '';
+    if (!emp || !MONTH_RE.test(m)) return send(res, 400, { error: 'بيانات غلط.' });
+    const shift = getShift();
+    return send(res, 200, { shift, rows: db.prepare('SELECT * FROM attendance WHERE emp_id=? AND substr(date,1,7)=? ORDER BY date').all(emp, m).map(r => attRow(r, shift)) });
+  }
+  if (p === '/attendance' && M === 'POST') {
+    if (!need('editor')) return; const b = await readBody(req);
+    const emp = +b.emp_id; const dates = Array.isArray(b.dates) ? [...new Set(b.dates)] : [];
+    if (!db.prepare('SELECT 1 FROM employees WHERE id=? AND archived=0').get(emp)) return send(res, 404, { error: 'الموظف مش موجود.' });
+    if (!ATT_STATUS.includes(b.status)) return send(res, 400, { error: 'الحالة غلط.' });
+    if (!dates.length || dates.length > 62 || !dates.every(validDate)) return send(res, 400, { error: 'التاريخ غلط.' });
+    for (const m of new Set(dates.map(d => d.slice(0, 7)))) if (isLocked(m)) return send(res, 409, { error: `شهر ${m} مقفول.` });
+    const off = b.status === 'absent' || b.status === 'leave';
+    const check_in = off || !b.check_in ? null : str(b.check_in, 5), check_out = off || !b.check_out ? null : str(b.check_out, 5);
+    if ((check_in && !TIME_RE.test(check_in)) || (check_out && !TIME_RE.test(check_out))) return send(res, 400, { error: 'الوقت غلط.' });
+    const hasOverride = !off && b.override_hours !== null && b.override_hours !== undefined && b.override_hours !== '';
+    const d = { status: b.status, check_in, check_out, override_hours: hasOverride ? num(b.override_hours, 0, 24) : null, note: str(b.note, 500) };
+    const name = empName(emp); let saved = 0;
+    db.exec('BEGIN');
+    try {
+      for (const date of dates) {
+        const before = db.prepare('SELECT status,check_in,check_out,override_hours,note FROM attendance WHERE emp_id=? AND date=?').get(emp, date);
+        if (before && b.only_empty) continue;
+        db.prepare('INSERT INTO attendance(emp_id,date,status,check_in,check_out,override_hours,note,by_user,at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(emp_id,date) DO UPDATE SET status=excluded.status,check_in=excluded.check_in,check_out=excluded.check_out,override_hours=excluded.override_hours,note=excluded.note,by_user=excluded.by_user,at=excluded.at')
+          .run(emp, date, d.status, d.check_in, d.check_out, d.override_hours, d.note, user.id, Date.now());
+        const [bf, af] = diff(before, d); if (af) audit(user, before ? 'update' : 'create', 'attendance', `${name} · ${date}`, bf, af);
+        saved++;
+      }
+      db.exec('COMMIT');
+    } catch (e) { db.exec('ROLLBACK'); throw e; }
+    return send(res, 200, { ok: true, saved });
+  }
+  if (p === '/attendance/shift' && M === 'POST') {
+    if (!need('admin')) return; const b = await readBody(req); const before = getShift();
+    if (!TIME_RE.test(str(b.start, 5))) return send(res, 400, { error: 'الوقت غلط.' });
+    const d = { start: str(b.start, 5), hours: num(b.hours, 1, 24) };
+    db.prepare('UPDATE settings SET shift_start=?,shift_hours=? WHERE id=1').run(d.start, d.hours);
+    const [bf, af] = diff(before, d); if (af) audit(user, 'update', 'settings', 'الوردية', bf, af); return send(res, 200, { ok: true });
+  }
+  const delAtt = p.match(/^\/attendance\/(\d+)\/(\d{4}-\d{2}-\d{2})$/);
+  if (delAtt && M === 'DELETE') {
+    if (!need('editor')) return; const emp = +delAtt[1], date = delAtt[2];
+    if (isLocked(date.slice(0, 7))) return send(res, 409, { error: 'الشهر ده مقفول.' });
+    const before = db.prepare('SELECT status,check_in,check_out,override_hours,note FROM attendance WHERE emp_id=? AND date=?').get(emp, date);
+    if (!before) return send(res, 404, { error: 'not found' });
+    db.prepare('DELETE FROM attendance WHERE emp_id=? AND date=?').run(emp, date);
+    audit(user, 'delete', 'attendance', `${empName(emp)} · ${date}`, before, null); return send(res, 200, { ok: true });
   }
 
   if (p === '/audit' && M === 'GET') {

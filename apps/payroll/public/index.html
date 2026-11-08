@@ -75,6 +75,37 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--accent-soft)}
 .audit .chg b{color:var(--ink);font-weight:500}
 .lock{font-size:.8rem}
 .tabs{overflow-x:auto}
+#v-attendance{display:grid;gap:14px}
+.att-crumbs{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:2px}
+#v-profile>.att-crumbs{margin-bottom:14px}
+.att-crumbs nav{display:flex;gap:8px;align-items:center;color:var(--muted)}
+button.link{border:0;background:none;padding:0;color:var(--accent)}
+.att-seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.att-seg button{border:0;border-radius:0;background:var(--surface);color:var(--muted)}
+.att-seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.att-head,.att-tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.att-sum{grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:8px}
+.att-sum .stat{padding:8px 12px}.att-sum .stat b{font-size:1.15rem}
+.att-over,.att-diff.over{color:var(--good)}.att-short,.att-diff.short{color:var(--bad)}
+.att-bulk{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 12px}
+.att-dow,.att-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.att-dow{color:var(--muted);font-size:.8rem;text-align:center;margin-bottom:6px}
+.att-day{min-height:92px;padding:6px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:start;font-size:.8rem;font-variant-numeric:tabular-nums}
+.att-day:not(:disabled):hover{border-color:var(--accent)}.att-day:disabled{cursor:default;color:var(--ink)}
+.att-day .n{font-weight:600}.att-day.off{background:transparent}
+.att-day.today{border-color:var(--accent);border-width:2px;padding:5px}
+.att-day.sel{background:var(--accent-soft);outline:2px solid var(--accent);outline-offset:-1px}
+.att-st{display:inline-block;font-size:.76rem;font-weight:600;border-radius:5px;padding:0 6px;white-space:nowrap}
+.att-good{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}.att-warn{color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,transparent)}.att-gold{color:var(--gold);background:color-mix(in srgb,var(--gold) 14%,transparent)}.att-accent{color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}.att-bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 14%,transparent)}
+.att-man{font-style:normal;color:var(--gold)}.att-man-tag{font-size:.76rem;color:var(--gold);white-space:nowrap}
+.att-note{white-space:normal;max-width:220px;color:var(--muted);font-size:.85rem}
+dialog{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:18px;width:min(420px,calc(100vw - 32px))}
+dialog::backdrop{background:rgb(0 0 0/.45)}
+dialog form{display:grid;gap:12px}dialog label{display:grid;gap:4px}dialog input,dialog select,dialog textarea{width:100%}
+.att-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.att-check{display:flex!important;grid-template-columns:none;gap:8px;align-items:center}.att-check input{width:auto}
+.att-acts{display:flex;gap:8px;justify-content:flex-end}.att-acts .danger{margin-inline-end:auto}
+@media (max-width:600px){.att-dow,.att-grid{gap:3px}.att-day{min-height:68px;padding:3px;font-size:.7rem}.att-day.today{padding:2px}.att-st{font-size:.64rem;padding:0 3px}.att-diff{display:none}}
 </style>
 <div id="login" class="wrap" dir="rtl" hidden>
   <form class="panel login" id="loginForm">
@@ -97,14 +128,25 @@ tbody tr{cursor:pointer}tbody tr:hover{background:var(--accent-soft)}
   <nav class="tabs" role="tablist">
     <button role="tab" id="t-team" aria-selected="true">الفريق</button>
     <button role="tab" id="t-profile" aria-selected="false">البروفايل</button>
+    <button role="tab" id="t-attendance" aria-selected="false">الحضور</button>
     <button role="tab" id="t-audit" aria-selected="false">سجل التعديلات</button>
     <button role="tab" id="t-settings" aria-selected="false">الإعدادات</button>
   </nav>
   <section id="v-team"></section>
   <section id="v-profile" hidden></section>
+  <section id="v-attendance" hidden></section>
   <section id="v-audit" hidden></section>
   <section id="v-settings" hidden></section>
 </div>
+<dialog id="attDlg" dir="rtl"><form id="attForm"><h2 id="adTitle"></h2>
+  <label class="note">الحالة<select id="adStatus"><option value="present">حاضر</option><option value="late">متأخر</option><option value="half">نص يوم</option><option value="leave">إجازة</option><option value="absent">غايب</option></select></label>
+  <div id="adTimes" style="display:grid;gap:12px"><div class="att-pair"><label class="note">حضور<input type="time" id="adIn"></label><label class="note">انصراف<input type="time" id="adOut"></label></div>
+  <div class="note" id="adAuto"></div>
+  <label class="note att-check"><input type="checkbox" id="adOv">تعديل عدد الساعات يدوي</label><input type="number" id="adHours" min="0" max="24" step="0.25" aria-label="عدد الساعات" hidden></div>
+  <label class="note">ملاحظة<input id="adNote" maxlength="500"></label>
+  <div class="att-acts"><button type="button" class="danger" id="adClear">مسح اليوم</button><button type="button" id="adCancel">إلغاء</button><button class="pri" type="submit">حفظ</button></div></form></dialog>
+<dialog id="shiftDlg" dir="rtl"><form id="shiftForm"><h2>الوردية</h2><div class="att-pair"><label class="note">بداية الوردية<input type="time" id="sdStart" required></label><label class="note">عدد الساعات<input type="number" id="sdHours" min="1" max="24" step="0.5" required></label></div>
+  <div class="att-acts"><button type="button" id="sdCancel">إلغاء</button><button class="pri" type="submit">حفظ</button></div></form></dialog>
 <div id="toast" class="toast" hidden></div>
 
 <script>
@@ -245,7 +287,7 @@ function renderProfile(){
 
 const LBL={name:'الاسم',role:'الوظيفة',phone:'الموبايل',start:'التعيين',base:'الأساسي',fixed_pct:'نسبة الثابت',notes:'ملاحظات',absence:'غياب',late:'تأخير',minor:'مخالفة بسيطة',major:'مخالفة كبيرة',quality:'الجودة',meetings:'الميتنجز',delivery:'الديليفري',points:'نقاط',reason:'السبب',bonus_budget:'ميزانية البونص',locked:'مقفول',work_days:'أيام العمل',active:'مفعّل',password:'الباسورد',username:'اسم المستخدم'};
 const ACT={create:'إضافة',update:'تعديل',delete:'حذف',archive:'أرشفة',login:'دخول'};
-const ENT={employee:'موظف',record:'تقييم',points:'نقاط',month:'شهر',settings:'الإعدادات',user:'مستخدم',session:'',password:'باسورد'};
+const ENT={attendance:'حضور',employee:'موظف',record:'تقييم',points:'نقاط',month:'شهر',settings:'الإعدادات',user:'مستخدم',session:'',password:'باسورد'};
 async function renderAudit(){
   const v=$('#v-audit');v.innerHTML='<div class="note">جاري التحميل…</div>';
   const rows=await call('GET','/audit?limit=300');const f=v.dataset.f||'edits';
@@ -290,13 +332,106 @@ async function renderSettings(){
   }
 }
 
-function show(view){S.view=view;['team','profile','audit','settings'].forEach(k=>{$('#v-'+k).hidden=k!==view;$('#t-'+k).setAttribute('aria-selected',k===view)});render()}
+function show(view){S.view=view;if(view!=='attendance'&&location.hash)history.replaceState(null,'',location.pathname);['team','profile','attendance','audit','settings'].forEach(k=>{$('#v-'+k).hidden=k!==view;$('#t-'+k).setAttribute('aria-selected',k===view)});render()}
 function render(){
   $('#lockBadge').innerHTML=locked()?'<span class="pill p-warn">الشهر مقفول</span>':'';
-  if(S.view==='team')renderTeam();else if(S.view==='profile')renderProfile();else if(S.view==='audit')renderAudit();else renderSettings();
+  if(S.view==='team')renderTeam();else if(S.view==='profile')renderProfile();else if(S.view==='attendance')renderAttendance();else if(S.view==='audit')renderAudit();else renderSettings();
 }
-['team','profile','audit','settings'].forEach(k=>$('#t-'+k).onclick=()=>show(k));
+['team','profile','attendance','audit','settings'].forEach(k=>$('#t-'+k).onclick=()=>show(k));
 $('#month').onchange=render;
+
+// ---------- attendance ----------
+const ATT_ST={present:['حاضر','good'],late:['متأخر','warn'],half:['نص يوم','gold'],leave:['إجازة','accent'],absent:['غايب','bad']};
+const ATT_GRACE=15; // minutes after shift start before a check-in counts as late
+const A={rows:{},shift:{start:'09:00',hours:8},view:'cal',sel:new Set(),selecting:false,seq:0,key:'',date:null};
+const p2=n=>String(n).padStart(2,'0');
+const toDs=d=>d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());
+const hrs=n=>(+n).toLocaleString('ar-EG',{maximumFractionDigits:2});
+const signed=n=>(n>0?'+':'')+hrs(n)+' س';
+const mins=t=>{const [h,m]=t.split(':').map(Number);return h*60+m};
+const addH=(t,h)=>{const x=(mins(t)+Math.round(h*60))%1440;return p2(Math.floor(x/60))+':'+p2(x%60)};
+const span=(i,o)=>{if(!i||!o)return null;let m=mins(o)-mins(i);if(m<0)m+=1440;return Math.round(m/60*100)/100};
+const attEd=()=>can('editor')&&!locked();
+function attMonthDays(){const [y,m]=M().split('-').map(Number);const n=new Date(y,m,0).getDate();return Array.from({length:n},(_,i)=>{const d=new Date(y,m-1,i+1);return{ds:toDs(d),day:i+1,dow:d.getDay()}})}
+const attLabel=ds=>new Date(ds+'T12:00:00').toLocaleDateString('ar-EG',{weekday:'long',day:'numeric',month:'long'});
+function attTimes(status){if(status==='absent'||status==='leave')return{check_in:null,check_out:null};const h=status==='half'?A.shift.hours/2:A.shift.hours;return{check_in:A.shift.start,check_out:addH(A.shift.start,h)}}
+function attDiff(r){if(r.diff===null||r.diff===undefined||r.diff===0)return'';return`<span class="att-diff ${r.diff>0?'over':'short'}">${signed(r.diff)}</span>`}
+function attBadge(r){const[l,c]=ATT_ST[r.status];return`<span class="att-st att-${c}">${l}</span>`}
+
+async function renderAttendance(){
+  const v=$('#v-attendance');const emp=S.emps[S.cur];
+  if(!emp||emp.archived){A.seq++;v.innerHTML=`<div class="panel empty">اختار موظف عشان تسجل حضوره.</div><div class="bar" style="margin-top:12px"><select id="attPick" aria-label="الموظف"><option value="">اختار…</option>${attEmpOpts()}</select></div>`;$('#attPick').onchange=ev=>{if(ev.target.value){S.cur=+ev.target.value;renderAttendance()}};return}
+  const key=S.cur+'_'+M();if(key!==A.key){A.key=key;A.sel.clear();A.selecting=false}
+  const q=++A.seq;const d=await call('GET',`/attendance?emp=${S.cur}&month=${M()}`).catch(()=>null);
+  if(!d||q!==A.seq||S.view!=='attendance')return;
+  A.shift=d.shift;A.rows=Object.fromEntries(d.rows.map(r=>[r.date,r]));
+  history.replaceState(null,'',`#/employees/${S.cur}/attendance`);paintAtt(emp);
+}
+function attEmpOpts(){return Object.values(S.emps).filter(e=>!e.archived).sort((a,b)=>a.name.localeCompare(b.name,'ar')).map(e=>`<option value="${e.id}" ${e.id===S.cur?'selected':''}>${esc(e.name)}</option>`).join('')}
+function empSubnav(cur){return`<div class="att-crumbs"><nav aria-label="مسار الصفحة"><button class="link" data-go="team">الفريق</button><span>‹</span><b>${esc(S.emps[S.cur]?.name||'')}</b></nav><div class="att-seg" role="group" aria-label="أقسام الموظف"><button data-go="profile" ${cur==='profile'?'aria-pressed="true"':''}>المرتب والبيانات</button><button data-go="attendance" ${cur==='attendance'?'aria-pressed="true"':''}>الحضور</button></div></div>`}
+function bindSubnav(root){root.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go))}
+
+function paintAtt(emp){
+  const v=$('#v-attendance');const ed=attEd();const rows=Object.values(A.rows);const today=toDs(new Date());const tr=A.rows[today];
+  const count=s=>rows.filter(r=>r.status===s).length;
+  const total=rows.reduce((a,r)=>a+(r.hours||0),0),over=rows.reduce((a,r)=>a+(r.diff>0?r.diff:0),0),short=rows.reduce((a,r)=>a+(r.diff<0?-r.diff:0),0);
+  const days=attMonthDays();const lead=(days[0].dow+1)%7;
+  const cell=d=>{const r=A.rows[d.ds];const sel=A.sel.has(d.ds);const label=attLabel(d.ds)+(r?' — '+ATT_ST[r.status][0]:' — لم يسجل');
+    return`<button class="att-day ${d.dow===5?'off':''} ${d.ds===today?'today':''} ${sel?'sel':''}" data-day="${d.ds}" aria-label="${label}" ${A.selecting?`aria-pressed="${sel}"`:''} ${ed?'':'disabled'}><span class="n">${hrs(d.day)}</span>${r?`${attBadge(r)}${r.hours!==null?`<span class="h">${hrs(r.hours)} س${r.override_hours!==null?' <i class="att-man" title="معدل يدوي">✎</i>':''}</span>`:''}${attDiff(r)}`:''}</button>`};
+  const row=d=>{const r=A.rows[d.ds];return`<tr data-day="${d.ds}" ${ed?'':'style="cursor:default"'}><td>${attLabel(d.ds)}</td><td>${r?attBadge(r):'<span class="note">—</span>'}</td><td>${r?.check_in||'—'}</td><td>${r?.check_out||'—'}</td><td>${r&&r.hours!==null?hrs(r.hours)+(r.override_hours!==null?' <span class="att-man-tag">✎ يدوي</span>':''):'—'}</td><td>${r?attDiff(r)||'—':'—'}</td><td class="att-note">${esc(r?.note||'')}</td></tr>`};
+  const quick=!ed?'':tr?`<span class="note">النهاردة:</span>${attBadge(tr)}<button id="attToday">تعديل النهاردة</button>`:`<span class="note">النهاردة:</span>${Object.entries(ATT_ST).filter(([k])=>k!=='half').map(([k,[l]])=>`<button class="${k==='present'?'pri':''}" data-quick="${k}">${l}</button>`).join('')}`;
+  v.innerHTML=`${empSubnav('attendance')}
+  <div class="att-head"><div class="bar"><select id="attEmp" aria-label="الموظف">${attEmpOpts()}</select><span class="note">الوردية ${A.shift.start} · ${hrs(A.shift.hours)} ساعات</span>${can('admin')?'<button class="ghost" id="attShift">تعديل</button>':''}</div><div class="bar">${quick}</div></div>
+  ${locked()?'<div class="note">الشهر مقفول. افتحه من الأدمن عشان تعدل.</div>':''}
+  <div class="summary att-sum"><div class="stat"><b>${hrs(count('present')+count('late'))}</b><span>حضور</span></div><div class="stat"><b>${hrs(count('late'))}</b><span>تأخير</span></div><div class="stat"><b>${hrs(count('absent'))}</b><span>غياب</span></div><div class="stat"><b>${hrs(count('leave'))}</b><span>إجازة</span></div><div class="stat"><b>${hrs(count('half'))}</b><span>نص يوم</span></div><div class="stat"><b>${hrs(total)}</b><span>إجمالي الساعات</span></div><div class="stat"><b class="att-over">${hrs(over)}</b><span>أوفر تايم</span></div><div class="stat"><b class="att-short">${hrs(short)}</b><span>نقص ساعات</span></div></div>
+  <div class="att-tools"><div class="att-seg" role="group" aria-label="طريقة العرض"><button id="attCal" ${A.view==='cal'?'aria-pressed="true"':''}>تقويم</button><button id="attList" ${A.view==='list'?'aria-pressed="true"':''}>جدول</button></div>${ed&&A.view==='cal'?`<button id="attBulk" ${A.selecting?'aria-pressed="true"':''}>${A.selecting?'إلغاء التحديد':'تحديد أيام'}</button>`:''}</div>
+  ${A.selecting&&ed?`<div class="att-bulk panel"><b>${hrs(A.sel.size)} يوم</b><button id="attEmpty">كل أيام الشغل الفاضية</button><select id="attBulkSt" aria-label="الحالة">${Object.entries(ATT_ST).map(([k,[l]])=>`<option value="${k}">${l}</option>`).join('')}</select><button class="pri" id="attApply" ${A.sel.size?'':'disabled'}>تطبيق</button><span class="note">الأيام المسجلة هتتستبدل لو حددتها.</span></div>`:''}
+  ${A.view==='cal'?`<div class="att-cal"><div class="att-dow">${['سبت','أحد','إتنين','تلات','أربع','خميس','جمعة'].map(x=>`<span>${x}</span>`).join('')}</div><div class="att-grid">${'<span></span>'.repeat(lead)}${days.map(cell).join('')}</div></div>`:`<div class="tblw"><table><thead><tr><th>اليوم</th><th>الحالة</th><th>حضور</th><th>انصراف</th><th>ساعات</th><th>فرق</th><th>ملاحظة</th></tr></thead><tbody>${days.map(row).join('')}</tbody></table></div>`}`;
+  bindSubnav(v);
+  $('#attEmp').onchange=ev=>{S.cur=+ev.target.value;renderAttendance()};
+  $('#attCal').onclick=()=>{A.view='cal';paintAtt(emp)};
+  $('#attList').onclick=()=>{A.view='list';A.selecting=false;A.sel.clear();paintAtt(emp)};
+  const sh=$('#attShift');if(sh)sh.onclick=openShift;
+  const tb=$('#attToday');if(tb)tb.onclick=()=>openAtt(today);
+  v.querySelectorAll('[data-quick]').forEach(b=>b.onclick=()=>attQuick(b.dataset.quick,today));
+  if(ed)v.querySelectorAll('[data-day]').forEach(el=>el.onclick=()=>{const d=el.dataset.day;if(A.selecting){A.sel.has(d)?A.sel.delete(d):A.sel.add(d);paintAtt(emp)}else openAtt(d)});
+  const bk=$('#attBulk');if(bk)bk.onclick=()=>{A.selecting=!A.selecting;A.sel.clear();paintAtt(emp)};
+  const em=$('#attEmpty');if(em)em.onclick=()=>{days.filter(d=>d.dow!==5&&d.ds<=today&&!A.rows[d.ds]).forEach(d=>A.sel.add(d.ds));paintAtt(emp)};
+  const ap=$('#attApply');if(ap)ap.onclick=async()=>{const status=$('#attBulkSt').value;const r=await call('POST','/attendance',{emp_id:S.cur,dates:[...A.sel],status,...attTimes(status)}).catch(()=>null);if(r){A.sel.clear();A.selecting=false;toast(`اتسجل ${hrs(r.saved)} يوم`);renderAttendance()}};
+}
+async function attQuick(status,date){
+  const t=attTimes(status);if(status==='late'){const n=new Date();t.check_in=p2(n.getHours())+':'+p2(n.getMinutes());t.check_out=null}
+  await call('POST','/attendance',{emp_id:S.cur,dates:[date],status,...t}).then(()=>{toast('اتسجل');renderAttendance()}).catch(()=>{});
+}
+
+function openAtt(date){
+  A.date=date;const r=A.rows[date];const st=r?.status||'present';const t=r?r:attTimes(st);
+  $('#adTitle').textContent=attLabel(date);$('#adStatus').value=st;$('#adIn').value=t.check_in||'';$('#adOut').value=t.check_out||'';
+  $('#adOv').checked=r?.override_hours!==null&&r?.override_hours!==undefined;$('#adHours').value=$('#adOv').checked?r.override_hours:'';$('#adNote').value=r?.note||'';$('#adClear').hidden=!r;
+  attDlgSync();$('#attDlg').showModal();
+}
+function attDlgSync(){
+  const off=['absent','leave'].includes($('#adStatus').value);$('#adTimes').hidden=off;
+  const ov=$('#adOv').checked;$('#adHours').hidden=!ov;
+  const auto=span($('#adIn').value,$('#adOut').value);$('#adAuto').textContent=auto===null?'سجل الحضور والانصراف عشان تتحسب الساعات.':`محسوبة تلقائي: ${hrs(auto)} ساعة`;
+}
+$('#adStatus').onchange=()=>{const s=$('#adStatus').value;const t=attTimes(s);if(s!=='absent'&&s!=='leave'&&!$('#adIn').value){$('#adIn').value=t.check_in;$('#adOut').value=t.check_out}attDlgSync()};
+$('#adIn').oninput=()=>{const i=$('#adIn').value,s=$('#adStatus');if(i&&['present','late'].includes(s.value))s.value=mins(i)>mins(A.shift.start)+ATT_GRACE?'late':'present';attDlgSync()};
+$('#adOut').oninput=attDlgSync;
+$('#adOv').onchange=()=>{attDlgSync();if($('#adOv').checked)$('#adHours').focus()};
+$('#adCancel').onclick=()=>$('#attDlg').close();
+$('#adClear').onclick=async()=>{await call('DELETE',`/attendance/${S.cur}/${A.date}`).then(()=>{$('#attDlg').close();toast('اتمسح');renderAttendance()}).catch(()=>{})};
+$('#attForm').onsubmit=async ev=>{ev.preventDefault();
+  if($('#adOv').checked&&$('#adHours').value===''){toast('اكتب عدد الساعات');return}
+  await call('POST','/attendance',{emp_id:S.cur,dates:[A.date],status:$('#adStatus').value,check_in:$('#adIn').value,check_out:$('#adOut').value,override_hours:$('#adOv').checked?$('#adHours').value:null,note:$('#adNote').value}).then(()=>{$('#attDlg').close();toast('اتحفظ');renderAttendance()}).catch(()=>{});
+};
+function openShift(){$('#sdStart').value=A.shift.start;$('#sdHours').value=A.shift.hours;$('#shiftDlg').showModal()}
+$('#sdCancel').onclick=()=>$('#shiftDlg').close();
+$('#shiftForm').onsubmit=async ev=>{ev.preventDefault();await call('POST','/attendance/shift',{start:$('#sdStart').value,hours:$('#sdHours').value}).then(()=>{$('#shiftDlg').close();toast('اتحفظ');renderAttendance()}).catch(()=>{})};
+function attRoute(){const m=location.hash.match(/^#\/employees\/(\d+)\/attendance$/);if(m&&S.me){S.cur=+m[1];if(S.view!=='attendance')show('attendance')}}
+window.addEventListener('hashchange',attRoute);
+const renderProfileCore=renderProfile;
+renderProfile=function(){renderProfileCore();const v=$('#v-profile');if(S.emps[S.cur]&&!v.querySelector('.att-crumbs')){v.insertAdjacentHTML('afterbegin',empSubnav('profile'));bindSubnav(v)}};
 
 function showLogin(){$('#app').hidden=true;$('#login').hidden=false;$('#lu').focus()}
 $('#loginForm').onsubmit=async ev=>{ev.preventDefault();$('#lerr').textContent='';
@@ -309,6 +444,7 @@ async function start(){
   $('#login').hidden=true;$('#app').hidden=false;
   $('#whoName').textContent=S.me.name+' · '+{admin:'أدمن',editor:'محرر',viewer:'مشاهد'}[S.me.role];
   await load();
+  attRoute();
 }
 start();
 setInterval(()=>{if(!$('#app').hidden&&!document.activeElement?.closest('input,textarea,select'))load().catch(()=>{})},60000);
