@@ -195,6 +195,19 @@ img{display:block}
 .lc-ready{margin-top:16px;align-self:stretch;display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:18px;background:var(--accent);color:var(--cream)}
 .lc-ready b{font-size:20px}
 .lc-ready span{font-size:16px}
+/* Google review invite: shown once after a bill request (same for every guest) */
+:root{--gold:#C8A464;--sage:#8FA68A;--grey:#A9AEB8}
+.rv{position:absolute;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.rv[hidden]{display:none}
+.rv-card{position:relative;width:calc(100% - 32px);max-width:440px;margin:0 16px max(16px,env(safe-area-inset-bottom));padding:28px 22px 14px;border-radius:24px;background:var(--navy);color:var(--cream);border:1px solid rgba(200,164,100,.35);box-shadow:0 18px 48px rgba(10,14,24,.35);text-align:center;animation:rvIn 380ms var(--ease-out) both}
+@keyframes rvIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.rv-card{animation:fade 200ms ease both}}
+.rv-leaf{width:46px;height:46px;margin:0 auto;border-radius:50%;display:grid;place-items:center;background:rgba(143,166,138,.16);color:var(--sage)}
+.rv h2{margin:14px 0 0;font-size:25px;line-height:1.3;font-weight:700}
+.rv p{margin:10px 0 0;font-size:17px;line-height:1.65;color:rgba(244,238,226,.82)}
+.rv-go{margin-top:22px;display:flex;align-items:center;justify-content:center;height:56px;border-radius:999px;background:var(--gold);color:var(--navy-deep);font-size:18px;font-weight:700;text-decoration:none}
+.rv-go:focus-visible,.rv-later:focus-visible{outline:2px solid var(--cream);outline-offset:3px}
+.rv-later{margin-top:6px;width:100%;height:46px;border:0;background:transparent;color:var(--grey);font:inherit;font-size:15px;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -202,6 +215,7 @@ img{display:block}
 
 <noscript><p style="color:#F4EEE2;text-align:center;padding:24px">Please enable JavaScript to view the menu.</p></noscript>
 
+<script src="assets/config.js"></script>
 <script src="assets/orders.js"></script>
 <script src="assets/menu.js"></script>
 </body>
