@@ -318,6 +318,7 @@
       Object.keys(sent).forEach(function (k) { if (!fresh(k)) delete sent[k]; });
       store('sq-sent', sent); store('sq-last', last);
       view = rec; paintSheet();
+      if (kind === 'bill') openReview();
     }).catch(function () {
       paintSheet(V('fail'));
     });
@@ -333,6 +334,62 @@
     if (e.key === 'Escape') closeSheet();
   });
 
+  // ---- Google review invite, shown right after a bill request is sent ----
+  // Every guest gets the same invite: no rating first, no reward for reviewing (Google policy).
+  var REVIEW_URL = (window.SEQUOIA_CONFIG || {}).GOOGLE_REVIEW_URL || '';
+  var REVIEW_EVERY = 12 * 3600e3;      // show at most once per 12 hours on this phone
+  var REVIEW_AFTER_TAP = 30 * 864e5;   // after tapping "review", don't ask again for 30 days
+  var RV = {
+    ar: { title: 'شكرًا إنك قعدت معانا 🌿', body: 'لو قعدتك عجبتك، تقييمك على جوجل بيفرق معانا جدًا وبيساعد ناس تانية تلاقينا.',
+          go: 'قيّمنا على جوجل ⭐', later: 'مش دلوقتي' },
+    en: { title: 'Thanks for spending time with us 🌿', body: 'If you enjoyed your visit, a Google review means a lot to us and helps others find us.',
+          go: 'Review us on Google ⭐', later: 'Not now' }
+  };
+  var LEAF = '<svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19c0-8 5-13 14-14-1 9-6 14-14 14zM5 19l7-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  var rv = document.createElement('div');
+  rv.className = 'rv';
+  rv.hidden = true;
+
+  function reviewDue() {
+    if (!REVIEW_URL) return false;
+    var r = load('sq-review') || {}, now = Date.now();
+    if (r.clickedAt && now - r.clickedAt < REVIEW_AFTER_TAP) return false;
+    if (r.shownAt && now - r.shownAt < REVIEW_EVERY) return false;
+    return true;
+  }
+  function openReview() {
+    if (!reviewDue()) return;
+    var r = load('sq-review') || {}, t = RV[lang];
+    r.shownAt = Date.now(); store('sq-review', r);
+    rv.innerHTML = '<div class="scrim" data-rv-close></div>' +
+      '<div class="rv-card" role="dialog" aria-modal="true" aria-labelledby="rv-title">' +
+        '<div class="rv-leaf">' + LEAF + '</div>' +
+        '<h2 id="rv-title">' + t.title + '</h2>' +
+        '<p>' + t.body + '</p>' +
+        '<a class="press rv-go" data-rv-go href="' + esc(REVIEW_URL) + '" target="_blank" rel="noopener">' + t.go + '</a>' +
+        '<button class="rv-later" type="button" data-rv-close>' + t.later + '</button>' +
+      '</div>';
+    rv.hidden = false;
+    var go = rv.querySelector('[data-rv-go]');
+    if (go) go.focus();
+  }
+  function closeReview() {
+    if (rv.hidden) return;
+    rv.hidden = true;
+    var back = sheet.querySelector('[data-back]');
+    if (back && !sheet.hidden) back.focus();
+  }
+  rv.addEventListener('click', function (e) {
+    if (e.target.closest('[data-rv-go]')) {
+      var r = load('sq-review') || {};
+      r.clickedAt = Date.now(); store('sq-review', r);
+      closeReview(); // only hidden, so the link still opens in a new tab
+    } else if (e.target.closest('[data-rv-close]')) closeReview();
+  });
+  rv.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.stopPropagation(); closeReview(); }
+  });
+
   function render() {
     var h = location.hash, m = /^#s-(\d+)$/.exec(h), html;
     if (h === '#tracks') html = tracks();
@@ -342,6 +399,7 @@
     applyLang();
     app.innerHTML = html;
     app.appendChild(sheet);
+    app.appendChild(rv);
     if (window.SequoiaAccount) SequoiaAccount.reattach(app);
     var chips = document.getElementById('chips');
     if (chips) {

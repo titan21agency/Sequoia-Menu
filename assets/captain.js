@@ -137,6 +137,7 @@ function startApp() {
           '<span class="since">مستنية ' + since(f) + ' · ' + clock(f) + '</span>' +
           '<ul class="needs">' + lines + '</ul>' +
           '<button class="press take" type="button" data-take="' + esc(t) + '"' + (busy[t] ? ' disabled' : '') + '>✓ ' + takeLabel(items) + '</button>' +
+          (hasBill && REVIEW_URL ? '<button class="press rvbtn" type="button" data-review="' + esc(t) + '">⭐ ابعت لينك التقييم</button>' : '') +
         '</div>';
       }).join('') + '</div>';
     } else {
@@ -145,6 +146,7 @@ function startApp() {
     if (taken.length) {
       html += '<section class="done"><h3>اتعمل من شوية</h3><div class="dlist">' + taken.map(function (d, i) {
         return '<div class="ditem"><span>ترابيزة</span><span class="num">' + esc(d.table) + '</span><small>' + esc(d.items.map(what).join(' + ')) + ' · ' + clock(d.at) + '</small>' +
+          (REVIEW_URL && d.items.some(function (c) { return c.kind === 'bill'; }) ? '<button class="press rvbtn" type="button" data-review="' + esc(d.table) + '">⭐ لينك التقييم</button>' : '') +
           '<button class="press undo" type="button" data-undo="' + i + '">رجّعها</button></div>';
       }).join('') + '</div></section>';
     }
@@ -238,6 +240,59 @@ function startApp() {
     setTimeout(function () { el.remove(); }, 3500);
   }
 
+  // ---- Google review link: WhatsApp (wa.me) when the guest has a Sequoia Card number, else a QR ----
+  // Sent to every guest the same way: no rating first, no reward for reviewing (Google policy).
+  var REVIEW_URL = (window.SEQUOIA_CONFIG || {}).GOOGLE_REVIEW_URL || '';
+  var REVIEW_MSG = 'شكرًا إنك نورت سيكويا 🌿 لو قعدتك عجبتك، تقييمك على جوجل بيفرق معانا جدًا: ' + REVIEW_URL;
+  var rvx = null;
+  function reviewQr() {
+    if (typeof qrcode !== 'function') return '';
+    var q = qrcode(0, 'M');
+    q.addData(REVIEW_URL);
+    q.make();
+    return q.createSvgTag({ cellSize: 6, margin: 24, scalable: true, alt: 'QR تقييم سيكويا على جوجل' });
+  }
+  function closeReviewSend() { if (rvx) { rvx.remove(); rvx = null; } }
+  function paintReviewSend(t, contacts, qrFirst) {
+    closeReviewSend();
+    var html = '<b id="rvx-title">لينك التقييم · ترابيزة ' + esc(t) + '</b>';
+    if (contacts.length && !qrFirst) {
+      html += '<p>ابعت اللينك للعميل على واتساب:</p>' + contacts.map(function (c) {
+        return '<a class="press rvx-wa" target="_blank" rel="noopener" data-rvx-sent href="https://wa.me/' + esc(c.wa) + '?text=' + encodeURIComponent(REVIEW_MSG) + '">' +
+          'واتساب <span dir="ltr">' + esc(c.phone) + '</span></a>';
+      }).join('') + '<button class="press rvx-alt" type="button" data-rvx-qr>اعرض QR بدل كده</button>';
+    } else {
+      html += '<p>' + (contacts.length ? 'خلّي العميل يصوّر الكود ده بكاميرا موبايله:' : 'مفيش رقم محفوظ للترابيزة دي. خلّي العميل يصوّر الكود ده بكاميرا موبايله:') + '</p>' +
+        '<div class="rvx-qr">' + reviewQr() + '</div>';
+    }
+    html += '<button class="press rvx-close" type="button" data-rvx-close>قفل</button>';
+    rvx = document.createElement('div');
+    rvx.className = 'rvx';
+    rvx.innerHTML = '<div class="rvx-box" role="dialog" aria-modal="true" aria-labelledby="rvx-title">' + html + '</div>';
+    rvx.addEventListener('click', function (e) {
+      if (e.target === rvx || e.target.closest('[data-rvx-close]')) closeReviewSend();
+      else if (e.target.closest('[data-rvx-qr]')) paintReviewSend(t, contacts, true);
+      else if (e.target.closest('[data-rvx-sent]')) setTimeout(closeReviewSend, 0);
+    });
+    rvx.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeReviewSend(); });
+    document.body.appendChild(rvx);
+    var f = rvx.querySelector('.rvx-wa, .rvx-close');
+    if (f) f.focus();
+  }
+  function openReviewSend(t, btn) {
+    if (!REVIEW_URL) return;
+    btn.disabled = true;
+    fetch('/api/staff/review-contacts?table=' + encodeURIComponent(t), { credentials: 'same-origin', headers: { 'X-Requested-With': 'sequoia' } })
+      .then(function (r) {
+        if (r.status === 401 && SequoiaOrders.onLoggedOut) { SequoiaOrders.onLoggedOut(); throw new Error('login'); }
+        return r.ok ? r.json() : [];
+      })
+      .catch(function (err) { if (err && err.message === 'login') throw err; return []; }) // no connection: the QR still works
+      .then(function (list) { paintReviewSend(t, Array.isArray(list) ? list : [], false); })
+      .catch(function () {})
+      .then(function () { btn.disabled = false; });
+  }
+
   // ---- actions ----
   main.addEventListener('click', function (e) {
     var b = e.target.closest('[data-take]');
@@ -251,6 +306,8 @@ function startApp() {
         .catch(function () { delete busy[t]; b.disabled = false; toast('النت فيه مشكلة، جرّب تاني'); });
       return;
     }
+    var rb = e.target.closest('[data-review]');
+    if (rb) { openReviewSend(rb.getAttribute('data-review'), rb); return; }
     var u = e.target.closest('[data-undo]');
     if (u) {
       var d = taken[+u.getAttribute('data-undo')];
