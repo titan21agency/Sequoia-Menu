@@ -390,6 +390,15 @@ function createApp(opts = {}) {
       const rows = Q('SELECT p.table_number, p.at, c.id, c.phone, c.cycle FROM presence p JOIN customers c ON c.id=p.customer_id WHERE p.at>? ORDER BY p.table_number').all(t - 3 * H);
       return send(res, 200, rows.map(r => ({ id: r.id, table: r.table_number, phone: R.maskPhone(r.phone), card: card(r) })));
     }
+    // captain screen: Sequoia Card guests seated at one table (last 3 h), so the captain can send
+    // the Google review link on WhatsApp. `wa` is the wa.me number (20 + number without the leading 0).
+    if (p === '/staff/review-contacts' && M === 'GET') {
+      const tn = tableNo(url.searchParams.get('table'));
+      if (!tn) return send(res, 400, { error: 'table' });
+      const rows = Q('SELECT c.id, c.phone FROM presence p JOIN customers c ON c.id=p.customer_id WHERE p.table_number=? AND p.at>? ORDER BY p.at DESC').all(tn, t - 3 * H);
+      audit('staff', staff.id, 'review_contacts', null, { table: tn, count: rows.length }, ctx);
+      return send(res, 200, rows.map(r => ({ id: r.id, phone: R.maskPhone(r.phone), wa: '20' + r.phone.replace(/^0/, '') })));
+    }
     if (p === '/staff/customer' && M === 'GET') {
       const id = +url.searchParams.get('id'); const phone = R.normalizePhone(url.searchParams.get('phone'));
       const c = phone ? Q('SELECT * FROM customers WHERE phone=?').get(phone) : Number.isInteger(id) && id > 0 ? Q('SELECT * FROM customers WHERE id=?').get(id) : null;

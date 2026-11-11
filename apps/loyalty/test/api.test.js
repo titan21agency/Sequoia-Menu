@@ -116,6 +116,21 @@ test('table presence shows masked customers to staff', async () => {
   assert.equal(rows.length, 1); assert.equal(rows[0].table, 7); assert.equal(rows[0].phone, '010•••••678');
   t.close();
 });
+
+test('review contacts: staff only, per table, last 3 h, wa.me number', async () => {
+  const t = await setup(); const c = await customerLogin(t); const s = await staffLogin(t);
+  assert.equal((await t.jar()('GET', '/staff/review-contacts?table=7')).status, 401);
+  assert.equal((await c('GET', '/staff/review-contacts?table=7')).status, 401);
+  assert.equal((await s('GET', '/staff/review-contacts?table=abc')).status, 400);
+  assert.deepEqual((await s('GET', '/staff/review-contacts?table=7')).body, []);
+  await c('GET', '/me?table=7&s=' + t.app.tableSig(7));
+  const rows = (await s('GET', '/staff/review-contacts?table=7')).body;
+  assert.equal(rows.length, 1); assert.equal(rows[0].wa, '201012345678'); assert.equal(rows[0].phone, '010•••••678');
+  assert.deepEqual((await s('GET', '/staff/review-contacts?table=8')).body, []);
+  t.tick(3 * H + 1);
+  assert.deepEqual((await s('GET', '/staff/review-contacts?table=7')).body, []);
+  t.close();
+});
 test('customer logout ends the session', async () => {
   const t = await setup(); const c = await customerLogin(t);
   assert.equal((await c('POST', '/me/logout', {})).status, 200);
