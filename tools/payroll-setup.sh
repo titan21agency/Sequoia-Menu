@@ -56,10 +56,10 @@ CRON
 
 echo "==> Web address"
 CF=/etc/caddy/Caddyfile
-sed -i 's#@hidden path /.git\* /tools/\* /\*.zip#@hidden path /.git* /tools/* /apps/* /*.zip#' "$CF"
+mkdir -p /etc/caddy/sites
+grep -q '^import /etc/caddy/sites/' "$CF" || printf '\nimport /etc/caddy/sites/*.caddy\n' >> "$CF"
 if ! grep -q "^${HOST}" "$CF"; then
-  cat >> "$CF" <<CADDY
-
+  cat > /etc/caddy/sites/payroll.caddy <<CADDY
 ${HOST} {
 	reverse_proxy 127.0.0.1:3100
 	encode gzip
