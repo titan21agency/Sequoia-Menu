@@ -77,9 +77,9 @@ sequoia.menu.${DOMAIN} {
 		file_server
 		encode zstd gzip
 		# images are cached for a week (rename the file when it changes); pages/scripts always revalidate
-		@img path *.webp *.png *.jpg
+		@img path *.webp *.png *.jpg *.woff2
 		header @img Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
-		@other not path *.webp *.png *.jpg
+		@other not path *.webp *.png *.jpg *.woff2
 		header @other Cache-Control "no-cache"
 	}
 	header {
@@ -90,7 +90,7 @@ sequoia.menu.${DOMAIN} {
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 		Cross-Origin-Opener-Policy "same-origin"
 
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		-Server
 	}
 }
