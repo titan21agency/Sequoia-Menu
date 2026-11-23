@@ -97,7 +97,26 @@
       '<div style="flex:1 1 auto;min-height:24px"></div>' +
       '<button class="press btn-primary" data-go="#tracks"><svg class="flip" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><span>' + T('open') + '</span></button>' +
       (L ? L.more(lang) : '') +
-      '</div>' + (L ? L.html(lang) : '') + '</section>';
+      '</div>' + (L ? (lateBelow ? '<div id="below-slot"></div>' : L.html(lang)) : '') + '</section>';
+  }
+  // First visit only: the journal, events and links below the cover are drawn after the page has loaded
+  // (or as soon as the guest scrolls, touches or taps "more"), so the cover paints first on slow phones.
+  var lateBelow = true;
+  function fillBelow() {
+    var slot = app.querySelector('#below-slot'), cv = app.querySelector('.cvscroll');
+    lateBelow = false;
+    if (!slot || !cv || !window.SequoiaLanding) return;
+    slot.outerHTML = SequoiaLanding.html(lang);
+    SequoiaLanding.mount(cv, lang);
+  }
+  function whenToFill() {
+    var done = false, cv = app.querySelector('.cvscroll');
+    function go() { if (done) return; done = true; fillBelow(); }
+    if (document.readyState === 'complete') setTimeout(go, 0); else window.addEventListener('load', function () { setTimeout(go, 0); }, { once: true });
+    setTimeout(go, 4000);
+    if (cv) ['scroll', 'touchstart', 'wheel'].forEach(function (ev) { cv.addEventListener(ev, go, { once: true, passive: true }); });
+    // "More from Sequoia" before the sections exist: draw them first, then the landing's own handler scrolls
+    app.addEventListener('click', function (e) { if (e.target.closest('[data-lmore]')) go(); }, true);
   }
 
   function tracks() {
@@ -406,8 +425,10 @@
     if (window.SequoiaLanding) {
       SequoiaLanding.closeJournal();
       var cv = app.querySelector('.cvscroll');
-      if (cv) SequoiaLanding.mount(cv, lang);
+      if (cv && app.querySelector('#below-slot')) whenToFill();
+      else if (cv) SequoiaLanding.mount(cv, lang);
     }
+    lateBelow = false;   // only the very first screen waits
     if (window.SequoiaAccount) SequoiaAccount.reattach(app);
     var chips = document.getElementById('chips');
     if (chips) {
