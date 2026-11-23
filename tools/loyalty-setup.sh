@@ -12,7 +12,12 @@ SITE=/etc/caddy/sites/sequoia.caddy
 echo "==> User, data, code"
 id sequoia >/dev/null 2>&1 || useradd --system --home "$DATA" --shell /usr/sbin/nologin sequoia
 mkdir -p "$DATA"; chown sequoia:sequoia "$DATA"; chmod 700 "$DATA"
-git -C "$APP" pull --ff-only --quiet
+# This script lives in the checkout it updates. After pulling, start again from the new copy,
+# so a run never mixes old and new lines of this file.
+if [ -z "${SEQUOIA_SETUP_FRESH:-}" ]; then
+  git -C "$APP" pull --ff-only --quiet
+  SEQUOIA_SETUP_FRESH=1 exec bash "$APP/tools/loyalty-setup.sh" "$@"
+fi
 
 echo "==> Env file (created once; secrets are generated here and never printed)"
 if [ ! -f "$ENVF" ]; then
@@ -61,6 +66,9 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now sequoia-loyalty
 systemctl restart sequoia-loyalty
+sleep 3   # let the restarted API finish its one-time database upgrade before the import opens the database
+echo "==> Menu in the database (first run only: copies the built-in menu and publishes it; later runs change nothing)"
+( set -a; . "$ENVF"; set +a; sudo -E -u sequoia node "$APP/apps/loyalty/server.js" menu-import )
 
 echo "==> Restart on new code (the payroll job pulls /opt/titan-apps every 5 minutes)"
 cat > /usr/local/bin/sequoia-loyalty-update <<'UPD'
@@ -69,7 +77,7 @@ REV=$(git -C /opt/titan-apps rev-parse HEAD) || exit 0
 [ "$REV" = "$(cat /var/lib/sequoia-loyalty/.rev 2>/dev/null)" ] && exit 0
 systemctl restart sequoia-loyalty && echo "$REV" > /var/lib/sequoia-loyalty/.rev
 UPD
-chmod +x /usr/local/bin/sequoia-loyalty-update
+chmod 755 /usr/local/bin/sequoia-loyalty-update
 echo "*/5 * * * * root /usr/local/bin/sequoia-loyalty-update >/dev/null 2>&1" > /etc/cron.d/sequoia-loyalty
 cat > /usr/local/bin/sequoia-loyalty-backup <<'BAK'
 #!/bin/sh
@@ -77,7 +85,7 @@ cat > /usr/local/bin/sequoia-loyalty-backup <<'BAK'
 cd /var/lib/sequoia-loyalty && /usr/bin/node -e "const{DatabaseSync}=require('node:sqlite');const f='backup-'+new Date().toLocaleDateString('en',{weekday:'short'})+'.db';require('fs').rmSync(f,{force:true});new DatabaseSync('loyalty.db').exec(\"VACUUM INTO '\"+f+\"'\");const v=Object.values(new DatabaseSync(f,{readOnly:true}).prepare('PRAGMA integrity_check').get())[0];require('fs').writeFileSync('backup-status',new Date().toISOString()+' '+f+' '+v+'\n');if(v!=='ok')process.exit(1)" \
   || logger -t sequoia-backup "backup FAILED, see /var/lib/sequoia-loyalty/backup-status"
 BAK
-chmod +x /usr/local/bin/sequoia-loyalty-backup
+chmod 755 /usr/local/bin/sequoia-loyalty-backup   # readable by the sequoia user (cron runs it as sequoia); +x alone kept it root-only under umask 077
 echo "30 3 * * * sequoia /usr/local/bin/sequoia-loyalty-backup >/dev/null 2>&1" > /etc/cron.d/sequoia-loyalty-backup
 
 echo "==> Web: /api/* -> :${PORT}, security headers, caching"
@@ -91,7 +99,7 @@ sequoia.menu.titan22agency.com {
 	}
 	handle {
 		root * /srv/sites/sequoia
-		@hidden path /.git* /tools/* /apps/* /*.zip /.claude/*
+		@hidden path /.git* /tools/* /apps/* /docs/* /*.zip /.claude/*
 		respond @hidden 404
 		file_server
 		encode zstd gzip
@@ -115,5 +123,6 @@ CADDY
 caddy validate --config /etc/caddy/Caddyfile >/dev/null
 systemctl reload caddy
 
-echo "==> Done. Create captain logins with:"
-echo "    set -a; . ${ENVF}; set +a; sudo -E -u sequoia node ${APP}/apps/loyalty/server.js set-staff <username> captain \"<name>\""
+echo "==> Done. Create logins with (role: owner, manager or captain; old 'admin' logins are now owners):"
+echo "    set -a; . ${ENVF}; set +a; sudo -E -u sequoia node ${APP}/apps/loyalty/server.js set-staff <username> <role> \"<name>\""
+echo "    The owner can then add and manage staff from the admin page."

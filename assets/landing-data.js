@@ -13,7 +13,7 @@
       title: ['جرنال الزمن الجميل', 'The good old days, by the Nile'],
       blurb: ['٨ صفحات: ساعة النيل، أخبار التسعينات، حكاية المنصورة، طيور الشط، ٣٠ حاجة تعملها هنا، وفعاليات الموسم.',
               'Eight pages: the Nile hour, 90s news, the story of Mansoura, river birds, 30 things to do here and this season\'s events.'],
-      cover: 'assets/journal/issue-01/page-01.webp',
+      cover: 'assets/journal/issue-01/cover-thumb.webp',   // small copy of page 1 for the card (shown 124 px wide)
       pages: [
         'assets/journal/issue-01/page-01.webp', 'assets/journal/issue-01/page-02.webp',
         'assets/journal/issue-01/page-03.webp', 'assets/journal/issue-01/page-04.webp',

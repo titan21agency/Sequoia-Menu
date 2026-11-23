@@ -44,7 +44,8 @@
       pick1: 'Pick a track,', pick2: 'we\'ll press play.', prices: 'All prices in EGP', egp: 'EGP',
       sideA: 'SIDE A', sideB: 'SIDE B', track: 'TRACK', rewind: '‹ Rewind', next: 'Next track ›', trackList: 'Track list', finish: 'Finish',
       endB: 'End of side B', thanks: 'THANK YOU', again: 'PLAY IT AGAIN', toggle: 'ع', toggleLabel: 'عربي',
-      backCover: 'Back to cover', sections: 'Menu sections', close: 'Close'
+      backCover: 'Back to cover', sections: 'Menu sections', close: 'Close',
+      soldOut: 'Sold out', preview: 'Draft preview · guests don’t see these changes yet'
     },
     ar: {
       est: 'من 2026 · المنصورة', tagline: 'قهوة على النيل<br>ومود حلو', open: 'شغّل المنيو',
@@ -52,7 +53,8 @@
       pick1: 'اختار تراك،', pick2: 'وإحنا نشغّل.', prices: 'كل الأسعار بالجنيه', egp: 'جنيه',
       sideA: 'الوش الأول', sideB: 'الوش التاني', track: 'تراك', rewind: '› رجوع', next: 'التراك اللي بعده ‹', trackList: 'قايمة التراكات', finish: 'النهاية',
       endB: 'خلص الوش التاني', thanks: 'نورتنا', again: 'شغّله تاني', toggle: 'EN', toggleLabel: 'English',
-      backCover: 'رجوع للبداية', sections: 'أقسام المنيو', close: 'إغلاق'
+      backCover: 'رجوع للبداية', sections: 'أقسام المنيو', close: 'قفل',
+      soldOut: 'خلص', preview: 'معاينة المسودة · الزباين لسه مش شايفين التعديلات دي'
     }
   };
   var lang = 'en';
@@ -97,7 +99,26 @@
       '<div style="flex:1 1 auto;min-height:24px"></div>' +
       '<button class="press btn-primary" data-go="#tracks"><svg class="flip" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></svg><span>' + T('open') + '</span></button>' +
       (L ? L.more(lang) : '') +
-      '</div>' + (L ? L.html(lang) : '') + '</section>';
+      '</div>' + (L ? (lateBelow ? '<div id="below-slot"></div>' : L.html(lang)) : '') + '</section>';
+  }
+  // First visit only: the journal, events and links below the cover are drawn after the page has loaded
+  // (or as soon as the guest scrolls, touches or taps "more"), so the cover paints first on slow phones.
+  var lateBelow = true;
+  function fillBelow() {
+    var slot = app.querySelector('#below-slot'), cv = app.querySelector('.cvscroll');
+    lateBelow = false;
+    if (!slot || !cv || !window.SequoiaLanding) return;
+    slot.outerHTML = SequoiaLanding.html(lang);
+    SequoiaLanding.mount(cv, lang);
+  }
+  function whenToFill() {
+    var done = false, cv = app.querySelector('.cvscroll');
+    function go() { if (done) return; done = true; fillBelow(); }
+    if (document.readyState === 'complete') setTimeout(go, 0); else window.addEventListener('load', function () { setTimeout(go, 0); }, { once: true });
+    setTimeout(go, 4000);
+    if (cv) ['scroll', 'touchstart', 'wheel'].forEach(function (ev) { cv.addEventListener(ev, go, { once: true, passive: true }); });
+    // "More from Sequoia" before the sections exist: draw them first, then the landing's own handler scrolls
+    app.addEventListener('click', function (e) { if (e.target.closest('[data-lmore]')) go(); }, true);
   }
 
   function tracks() {
@@ -122,7 +143,7 @@
       '<div class="foot">' +
         '<div style="position:absolute;inset-inline-start:20px;bottom:24px;display:flex;flex-direction:column;gap:4px">' +
           '<span class="serif-i" style="font-size:18px">' + T('pick1') + '</span><span class="serif-i" style="font-size:18px">' + T('pick2') + '</span>' +
-          '<span class="caps" style="font-size:11px;letter-spacing:.2em;color:var(--beige);margin-top:4px">' + T('prices') + '</span></div>' +
+          '<span class="caps" style="font-size:12px;letter-spacing:.2em;color:var(--beige);margin-top:4px">' + T('prices') + '</span></div>' +
         '<img class="bob" src="assets/mascot-cassette-v3.webp" width="750" height="557" alt="" style="position:absolute;inset-inline-end:10px;bottom:6px;width:150px;height:auto">' +
       '</div>' + dock() + '</section>';
   }
@@ -136,14 +157,15 @@
       return (g.label ? '<div class="group">' + esc(gl(g)) + '</div>' : '') +
         g.items.map(function (it) {
           var d = Math.min(n++ * 35, 420);
-          return '<div class="item in" style="animation-delay:' + d + 'ms"><span class="nm">' + esc(nm(it)) + '</span><span class="dots" aria-hidden="true"></span><span class="pr">' + it[1] + '</span></div>';
+          var out = it[3] != null && SOLD[it[3]];   // sold out: still listed, faded, with a label
+          return '<div class="item in' + (out ? ' out' : '') + '" style="animation-delay:' + d + 'ms"><span class="nm">' + esc(nm(it)) + (out ? '<span class="so">' + T('soldOut') + '</span>' : '') + '</span><span class="dots" aria-hidden="true"></span><span class="pr">' + esc(it[1]) + '</span></div>';
         }).join('');
     }).join('');
     var prevLabel = i === 0 ? T('trackList') : st(SECTIONS[i - 1]);
     var nextLabel = i === last ? T('finish') : st(SECTIONS[i + 1]);
     var prevGo = i === 0 ? '#tracks' : '#s-' + i;
     var nextGo = i === last ? '#thanks' : '#s-' + (i + 2);
-    return '<section class="screen">' +
+    return '<section class="screen" data-sec="' + i + '">' +
       '<div class="bar">' +
         '<button class="press ghost caps" data-go="#tracks" style="font-size:14px;letter-spacing:.18em">' + CHEV_L + '<span>' + T('menu') + '</span></button>' +
         '<span class="wordmark"><img src="assets/tree-cream.webp" alt="" style="width:16px;height:auto"><span class="wm" style="font-size:19px">SEQUOIA</span></span>' +
@@ -181,21 +203,21 @@
   var PAY = [['cash', 'Cash', 'كاش'], ['card', 'Card', 'كارت'], ['instapay', 'InstaPay', 'InstaPay']];
   var QUICK = [['water', 'Water', 'مياه'], ['napkins', 'Napkins', 'مناديل'], ['clean', 'Clean table', 'تنضيف الترابيزة']]; // edit quick requests here: [code, English, Arabic]
   var SV = {
-    en: { ready: 'Ready to order', service: 'AT YOUR SERVICE', help: 'How can we help?', table: 'Table', bill: 'Ask for the bill', quick: 'Quick requests',
+    en: { ready: 'Ready to order', other: 'Other requests', service: 'AT YOUR SERVICE', help: 'How can we help?', table: 'Table', bill: 'Ask for the bill', quick: 'Quick requests',
           captainComing: 'Captain is coming', billComing: 'Bill is coming', isComing: ' is coming', tableW: 'Table',
           onWay: 'On the way!', heading: function (t) { return 'The captain is heading to table ' + t + '.'; },
           billTitle: 'Your bill is coming', paying: function (p, t) { return 'Paying by ' + p + ' · table ' + t + '.'; },
           upTitle: 'Coming right up', forTable: function (x, t) { return x + ' for table ' + t + '.'; },
           fbTitle: 'How was your visit?', fbLine: 'Tell us in 2 minutes — it goes straight to the owner.',
-          more: 'Anything else?', back: 'Back to menu', needTable: 'Please enter your table number.',
+          more: 'Ask for something else', back: 'Back to menu', needTable: 'Please enter your table number.',
           fail: 'Couldn\'t reach the captain. Check your connection and try again.' },
-    ar: { ready: 'جاهزين نطلب', service: 'في خدمتك', help: 'نقدر نساعدك إزاي؟', table: 'الترابيزة', bill: 'اطلب الحساب', quick: 'طلبات سريعة',
+    ar: { ready: 'جاهزين نطلب', other: 'طلبات تانية', service: 'في خدمتك', help: 'نقدر نساعدك إزاي؟', table: 'الترابيزة', bill: 'اطلب الحساب', quick: 'طلبات سريعة',
           captainComing: 'الكابتن جاي', billComing: 'الحساب جاي', isComing: ' جاية', tableW: 'ترابيزة',
           onWay: 'الكابتن جاي!', heading: function (t) { return 'الكابتن في الطريق لترابيزة ' + t + '.'; },
           billTitle: 'الحساب جاي', paying: function (p, t) { return 'الدفع ' + p + ' · ترابيزة ' + t + '.'; },
           upTitle: 'جاي حالًا', forTable: function (x, t) { return x + ' لترابيزة ' + t + '.'; },
           fbTitle: 'إيه رأيك في زيارتك؟', fbLine: 'قولنا في دقيقتين، ورأيك هيوصل للأونر على طول.',
-          more: 'محتاج حاجة تانية؟', back: 'رجوع للمنيو', needTable: 'اكتب رقم ترابيزتك.',
+          more: 'اطلب حاجة تانية', back: 'رجوع للمنيو', needTable: 'اكتب رقم ترابيزتك.',
           fail: 'مقدرناش نوصل للكابتن. اتأكد من النت وجرّب تاني.' }
   };
   function V(k) { return SV[lang][k]; }
@@ -226,13 +248,32 @@
     return esc(label(s.kind, s.detail)) + V('isComing') + tt;
   }
 
+  // two buttons: "Ready to order" calls the captain at once; "Other requests" opens the sheet (bill, water, ...)
+  var dockErr = '';
   function dock() {
     if (!table) return '';
-    var s = last && Date.now() - last.at < COOLDOWN ? last : null;
-    return '<div class="dock">' + (s
-      ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(s) + '</span></button>'
-      : '<button class="press call caps" data-call>' + BELL + '<span>' + V('ready') + '</span></button>') +
-      '</div>';
+    var c = fresh('call'), s = last && Date.now() - last.at < COOLDOWN && last.kind !== 'call' ? last : null;
+    return '<div class="dock">' +
+      (dockErr ? '<div class="dmsg" role="alert">' + esc(dockErr) + '</div>' : '') +
+      '<div class="drow">' + (c
+        ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(c) + '</span></button>'
+        : '<button class="press call caps" data-ready>' + BELL + '<span>' + V('ready') + '</span></button>') +
+      (s
+        ? '<button class="press call other sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(s) + '</span></button>'
+        : '<button class="press call other caps" data-call><span>' + V('other') + '</span></button>') +
+      '</div></div>';
+  }
+  function repaintDock() {
+    var d = app.querySelector('.dock');
+    if (d) d.outerHTML = dock();
+  }
+  var dockTimer = null;
+  function readyNow() {
+    if (!table || fresh('call')) return;
+    var b = app.querySelector('[data-ready]');
+    if (b) busy(b);
+    dockErr = '';
+    send('call');
   }
 
   var sheet = document.createElement('div');
@@ -248,8 +289,7 @@
   function closeSheet() {
     sheet.hidden = true;
     clearInterval(tick); tick = null;
-    var d = app.querySelector('.dock');
-    if (d) d.outerHTML = dock();
+    repaintDock();
   }
 
   function optBtn(attr, text, k) {
@@ -275,12 +315,10 @@
         '<button class="press btn-primary caps" data-back style="margin-top:18px"><span>' + V('more') + '</span></button>' +
         '<button class="press linkbtn caps" data-close>' + V('back') + '</button>';
     } else {
-      var c = fresh('call');
       html = '<span class="pill">' + V('service') + '</span>' +
         '<h2 id="sheet-title">' + V('help') + '</h2>' +
         '<div class="trow"><span class="tlabel caps">' + V('table') + '</span><span class="tfixed">' + esc(table) + '</span></div>' +
         '<div class="msg" id="tmsg" role="alert">' + (error ? esc(error) : '') + '</div>' +
-        '<button class="press btn-primary caps" data-send="call"' + (c ? ' disabled' : '') + '>' + BELL + '<span>' + (c ? V('captainComing') + ' · <span id="cd" dir="ltr">' + mmss(Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000)) + '</span>' : V('ready')) + '</span></button>' +
         '<span class="olabel caps">' + V('bill') + '</span>' +
         '<div class="opts">' + PAY.map(function (p) { return optBtn('data-send="bill" data-detail="' + p[0] + '"', p[li()], 'bill'); }).join('') + '</div>' +
         '<span class="olabel caps">' + V('quick') + '</span>' +
@@ -305,12 +343,21 @@
       '</div>';
   }
 
-  function send(kind, detail) {
+  // put the dock back to normal when the cooldown ends
+  function armDock() {
+    clearTimeout(dockTimer);
+    dockTimer = setTimeout(function () { if (sheet.hidden) repaintDock(); }, COOLDOWN + 500);
+  }
+  // loading state: the label stays, a spinner shows, a second tap does nothing
+  function busy(b) { b.disabled = true; b.classList.add('is-loading'); b.setAttribute('aria-busy', 'true'); }
+  function send(kind, detail, btn) {
     var key = kind === 'req' ? 'req:' + detail : kind;
     if (fresh(key)) return;
     var v = table;
     if (!v) return;
+    var direct = sheet.hidden;   // "Ready to order" from the dock: no sheet, the dock shows the result
     sheet.querySelectorAll('[data-send]').forEach(function (b) { b.disabled = true; });
+    if (btn) busy(btn);
     var at = Date.now(), msg = { type: kind, table: v, rid: at.toString(36) + Math.random().toString(36).slice(2, 6) };
     if (kind === 'bill') msg.pay = detail;
     if (kind === 'req') msg.item = detail;
@@ -320,9 +367,11 @@
       sent[key] = rec; last = rec;
       Object.keys(sent).forEach(function (k) { if (!fresh(k)) delete sent[k]; });
       store('sq-sent', sent); store('sq-last', last);
+      if (direct) { dockErr = ''; repaintDock(); armDock(); return; }
       view = rec; paintSheet();
       if (kind === 'bill') openReview();
     }).catch(function () {
+      if (direct) { dockErr = V('fail'); repaintDock(); return; }
       paintSheet(V('fail'));
     });
   }
@@ -331,7 +380,7 @@
     var b;
     if (e.target.closest('[data-close]')) closeSheet();
     else if (e.target.closest('[data-back]')) { view = null; paintSheet(); }
-    else if ((b = e.target.closest('[data-send]'))) send(b.getAttribute('data-send'), b.getAttribute('data-detail'));
+    else if ((b = e.target.closest('[data-send]'))) send(b.getAttribute('data-send'), b.getAttribute('data-detail'), b);
   });
   sheet.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeSheet();
@@ -393,8 +442,35 @@
     if (e.key === 'Escape') { e.stopPropagation(); closeReview(); }
   });
 
+  // chapter to chapter: swap only the header and the list, keep the screen, chips and dock (no reload feel)
+  var shownLang = null;
+  // force: redraw the same section in place (new prices / sold out), keeping the scroll position
+  function swapSection(i, force) {
+    var cur = app.querySelector('.screen[data-sec]');
+    if (!cur || shownLang !== lang) return false;
+    if (!force && +cur.getAttribute('data-sec') === i) return true;   // already showing it (hashchange + popstate both fire)
+    var y = force ? cur.querySelector('.scroll').scrollTop : 0;
+    var tpl = document.createElement('template');
+    tpl.innerHTML = section(i);
+    var nx = tpl.content.firstElementChild;
+    cur.setAttribute('data-sec', i);
+    cur.querySelector('.bar').replaceWith(nx.querySelector('.bar'));
+    var sc = nx.querySelector('.scroll');
+    [].forEach.call(sc.querySelectorAll('.in'), function (el) { el.classList.remove('in'); el.style.animationDelay = ''; });
+    if (!force) sc.classList.add('swap');
+    cur.querySelector('.scroll').replaceWith(sc);
+    if (force) sc.scrollTop = y;
+    var chips = cur.querySelector('#chips');
+    [].forEach.call(chips.querySelectorAll('[data-go]'), function (c, j) { c.setAttribute('aria-current', String(j === i)); });
+    var on = chips.querySelector('[aria-current="true"]');
+    if (on) chips.scrollTo({ left: Math.max(0, on.offsetLeft - chips.clientWidth / 2 + on.offsetWidth / 2), behavior: 'smooth' });
+    document.title = st(SECTIONS[i]) + ' — Sequoia Café';
+    return true;
+  }
   function render() {
     var h = location.hash, m = /^#s-(\d+)$/.exec(h), html;
+    if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length && swapSection(+m[1] - 1)) return;
+    shownLang = lang;
     if (h === '#tracks') html = tracks();
     else if (h === '#thanks') html = thanks();
     else if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length) html = section(+m[1] - 1);
@@ -406,8 +482,10 @@
     if (window.SequoiaLanding) {
       SequoiaLanding.closeJournal();
       var cv = app.querySelector('.cvscroll');
-      if (cv) SequoiaLanding.mount(cv, lang);
+      if (cv && app.querySelector('#below-slot')) whenToFill();
+      else if (cv) SequoiaLanding.mount(cv, lang);
     }
+    lateBelow = false;   // only the very first screen waits
     if (window.SequoiaAccount) SequoiaAccount.reattach(app);
     var chips = document.getElementById('chips');
     if (chips) {
@@ -418,7 +496,8 @@
   }
 
   app.addEventListener('click', function (e) {
-    if (e.target.closest('[data-call]')) { openSheet(); return; }
+    if (e.target.closest('[data-ready]')) { readyNow(); return; }
+    if (e.target.closest('[data-call]')) { dockErr = ''; openSheet(); return; }
     if (e.target.closest('[data-acct]')) { openAccount(); return; }
     if (e.target.closest('[data-lang]')) { lang = lang === 'ar' ? 'en' : 'ar'; try { localStorage.setItem('sq-lang', lang); } catch (_) {} render(); return; }
     var b = e.target.closest('[data-go]');
@@ -437,6 +516,55 @@
     });
     acctLoading.then(function () { SequoiaAccount.open(app, { table: table }); }, function () {});
   }
+  // song request (cover page card): sent to the captain screen as a request; without a table QR, WhatsApp instead
+  if (window.SequoiaLanding) SequoiaLanding.onSong = function (title) {
+    var wa = ((window.SEQUOIA_CONFIG || {}).WHATSAPP_URL || '');
+    if (!table) {
+      if (wa) window.open(wa + '?text=' + encodeURIComponent((lang === 'ar' ? 'عايز أطلب أغنية: ' : 'Song request: ') + title), '_blank', 'noopener');
+      return Promise.resolve('wa');
+    }
+    if (!window.SequoiaOrders) return Promise.reject(new Error('offline'));
+    var at = Date.now();
+    return SequoiaOrders.publish({ type: 'req', table: table, item: ('song:' + title).slice(0, 80), rid: at.toString(36) + Math.random().toString(36).slice(2, 6) })
+      .then(function () { return 'sent'; });
+  };
+  // ---- live menu: the published menu + sold out from the server. The list at the top of this file is only the
+  // fallback for a first visit without a connection; the last menu seen is kept on the phone for the next visit.
+  var SOLD = {}, menuKey = null, fetching = false;
+  var PREVIEW = /[?&]preview=1(&|$)/.test(location.search);   // staff: the draft, from the admin page
+  function applyMenu(m, quiet) {
+    if (!m || !Array.isArray(m.sections) || !m.sections.length) return false;
+    var key = JSON.stringify([m.sections, m.soldOut]);
+    if (key === menuKey) return false;
+    menuKey = key; SECTIONS = m.sections; SOLD = {};
+    (m.soldOut || []).forEach(function (id) { SOLD[id] = 1; });
+    if (!quiet) refreshScreen();
+    return true;
+  }
+  function refreshScreen() {
+    var m = /^#s-(\d+)$/.exec(location.hash);
+    if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length) { if (!swapSection(+m[1] - 1, true)) render(); }
+    else if (m || location.hash === '#tracks') render();   // counts on the track list; a section that is gone falls back
+  }
+  function fetchMenu() {
+    if (fetching || !window.fetch) return;
+    fetching = true;
+    fetch(PREVIEW ? '/api/staff/menu/preview' : '/api/menu', { credentials: 'same-origin', cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (m) { if (applyMenu(m) && !PREVIEW) { try { localStorage.setItem('sq-menu', JSON.stringify(m)); } catch (_) {} } })
+      .catch(function () {})
+      .then(function () { fetching = false; });
+  }
+  if (!PREVIEW) { try { applyMenu(JSON.parse(localStorage.getItem('sq-menu')), true); } catch (_) {} }
+  if (PREVIEW) {
+    var pv = document.createElement('div'); pv.className = 'pvbar'; pv.setAttribute('role', 'status');
+    pv.textContent = T('preview'); document.body.appendChild(pv);
+  }
+  // first check after the page has loaded (the cover paints first), then every 30 s while open and on return
+  if (document.readyState === 'complete') setTimeout(fetchMenu, 0); else window.addEventListener('load', function () { setTimeout(fetchMenu, 0); });
+  setInterval(function () { if (!document.hidden) fetchMenu(); }, 30000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) fetchMenu(); });
+
   window.addEventListener('hashchange', render);
   window.addEventListener('popstate', render);
   render();

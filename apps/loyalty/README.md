@@ -61,6 +61,22 @@ With `NODE_ENV=production` the server refuses to start without `WHATSAPP_PROVIDE
   NODE_NO_WARNINGS=1 node apps/loyalty/server.js memories-export > memories.csv
   ```
 
+## Menu admin
+Staff page: `/admin-q7n2xk4p.html` (Arabic). Same staff logins as the captain screen.
+
+| Role | Can |
+|---|---|
+| captain | mark items sold out / back in stock (live at once) |
+| manager | everything on the menu: items, prices, sections, groups, order, bulk price change, publish, discard, preview, change log |
+| owner | manager + staff accounts (add, new password, role, deactivate) |
+
+- The menu tables are the **draft**. Guests read the latest **published** snapshot from `GET /api/menu` (ETag, checked every 30 s while the menu is open). Sold out is the only thing that is live without publishing.
+- First run: `node apps/loyalty/server.js menu-import` copies the built-in list from `assets/menu.js` and publishes it (`tools/loyalty-setup.sh` does this; it skips when a menu exists).
+- The built-in list in `assets/menu.js` is now only the fallback for a phone's very first visit without a connection.
+- Roles were `captain`/`admin`. On first start the API rebuilds the staff table once (old `admin` → `owner`) after saving `loyalty.db.before-roles.db` next to the database. Roll back: stop the API, put that file back as `loyalty.db`, deploy the previous code.
+- Every menu change is in `audit_log` (who, when, before/after); the admin page shows it under "سجل التعديلات".
+- Ordering uses ▲/▼ buttons (work on phones and with a keyboard) instead of drag-and-drop.
+
 ## Security (Phase 2)
 - **Table calls** (call waiter / bill / request) go to this server (`POST /api/calls`), not ntfy.sh. The captain screen reads them from `GET /api/staff/calls/stream` (staff session, last 12 h replayed). Took/undo: `POST /api/staff/calls`.
 - **Captain screen** asks for a staff username + password (server session, 12 h) instead of the old client-side PIN. Create staff with `set-staff` above.
