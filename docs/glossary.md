@@ -27,6 +27,12 @@ Arabic is Egyptian, written for the café, not a word-for-word translation.
 | Events | Sequoia Events | فعاليات سيكويا | Replaced "Clubs". |
 | Leave a sheet | Back to menu · Close | رجوع للمنيو · قفل | One Arabic word for close: قفل. |
 | Decline a prompt | Not now | مش دلوقتي | |
+| Item not available today | Sold out | خلص | Guests see it faded with the label; staff toggle it: خلص / متاح. |
+| Staff roles | Owner · Manager · Captain | مالك · مدير · كابتن | Captain: sold out only. Manager: the whole menu. Owner: + staff accounts. |
+| Unpublished edits | Draft | المسودة | "3 تعديل في المسودة، لسه مش ظاهر للزباين." |
+| Make edits live | **Publish menu** | **انشر المنيو** | |
+| Throw away edits | Discard changes | إلغاء التعديلات | Always asks first. |
+| See the draft as a guest | Preview | معاينة | |
 
 ## Writing rules
 

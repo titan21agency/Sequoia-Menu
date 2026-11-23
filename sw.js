@@ -9,7 +9,7 @@
 'use strict';
 const VERSION = 'sq-v1';
 const SHELL = ['./', 'index.html', 'assets/fonts.css', 'assets/config.js', 'assets/landing-data.js', 'assets/landing.js', 'assets/orders.js', 'assets/menu.js'];
-const SKIP = /^\/(api\/|captain-|setup-)/;
+const SKIP = /^\/(api\/|captain-|setup-|admin-)/;
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
