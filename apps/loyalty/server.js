@@ -9,12 +9,13 @@ const { DatabaseSync } = require('node:sqlite');
 const CFG = require('./config');
 const R = require('./rules');
 const OTP = require('./otp');
+const { createMenu, RANK } = require('./menu');
 
 const SCHEMA = `
 PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;
 PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000; PRAGMA temp_store=MEMORY; -- NORMAL is crash-safe with WAL (may lose the last commit on power loss, never corrupts)
 CREATE TABLE IF NOT EXISTS customers(id INTEGER PRIMARY KEY, phone TEXT UNIQUE NOT NULL, created_at INTEGER NOT NULL, last_visit_at INTEGER, cycle INTEGER NOT NULL DEFAULT 1);
-CREATE TABLE IF NOT EXISTS staff(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN('captain','admin')), pass TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS staff(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN('owner','manager','captain')), pass TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, failed_logins INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS stamps(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), staff_id INTEGER NOT NULL REFERENCES staff(id), table_number INTEGER, created_at INTEGER NOT NULL, cycle_id INTEGER NOT NULL, request_id TEXT UNIQUE);
 CREATE TABLE IF NOT EXISTS rewards(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), staff_id INTEGER NOT NULL REFERENCES staff(id), redeemed_at INTEGER NOT NULL, cycle_id INTEGER NOT NULL, request_id TEXT UNIQUE, UNIQUE(customer_id, cycle_id));
 CREATE TABLE IF NOT EXISTS audit_log(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, actor_type TEXT NOT NULL, actor_id INTEGER, action TEXT NOT NULL, customer_id INTEGER, detail TEXT, ip TEXT, device TEXT);
@@ -68,10 +69,29 @@ function limiter() {
   };
 }
 
+// Staff roles were captain/admin; now owner/manager/captain (+ lockout columns). Old databases are rebuilt once.
+// A copy of the database is saved next to it first (<db>.before-roles.db): to roll back, stop the API and put that file back.
+function migrateStaffRoles(db, dbFile) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='staff'").get();
+  if (!row || row.sql.includes("'owner'")) return;
+  if (dbFile && dbFile !== ':memory:' && !fs.existsSync(dbFile + '.before-roles.db')) db.exec(`VACUUM INTO '${dbFile.replace(/'/g, "''")}.before-roles.db'`);
+  db.exec('PRAGMA foreign_keys=OFF');
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.exec(`CREATE TABLE staff_new(id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, name TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN('owner','manager','captain')), pass TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, failed_logins INTEGER NOT NULL DEFAULT 0, locked_until INTEGER NOT NULL DEFAULT 0);
+      INSERT INTO staff_new(id,username,name,role,pass,active) SELECT id,username,name,CASE role WHEN 'admin' THEN 'owner' ELSE role END,pass,active FROM staff;
+      DROP TABLE staff; ALTER TABLE staff_new RENAME TO staff;`);
+    if (db.prepare('PRAGMA foreign_key_check').all().length) throw new Error('foreign key check failed');
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; } finally { db.exec('PRAGMA foreign_keys=ON'); }
+}
+const LOCK_AFTER = 5, LOCK_MS = 15 * 60e3;   // wrong passwords in a row -> account locked for 15 minutes
+
 function createApp(opts = {}) {
   const now = opts.now || (() => Date.now());
   const db = new DatabaseSync(opts.dbFile || ':memory:');
   db.exec(SCHEMA);
+  migrateStaffRoles(db, opts.dbFile);
   // prepared-statement cache: compiling SQL on every request was the main CPU cost
   const stmts = new Map();
   const Q = sql => { let st = stmts.get(sql); if (!st) { st = db.prepare(sql); stmts.set(sql, st); } return st; };
@@ -246,6 +266,9 @@ function createApp(opts = {}) {
   const reqId = v => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
   const tableNo = v => { const n = +v; return Number.isInteger(n) && n >= 1 && n <= 999 ? n : null; };
 
+  const MENU = createMenu({ db, Q, send, readBody, audit, now });
+  const roleOf = u => (u.role === 'admin' ? 'owner' : u.role);   // 'admin' = old name of the top role
+
   // ---------- API ----------
   async function api(req, res, url) {
     const p = url.pathname.slice(4); const M = req.method;
@@ -357,6 +380,8 @@ function createApp(opts = {}) {
       return send(res, 200, { ok: true, id: addCall(msg, t) });
     }
 
+    // ----- public menu (published snapshot + live sold out); before /me*, since '/menu' starts with '/me' -----
+    if (MENU.publicRoute(p, M, req, res)) return;
     // ----- customer: read-only card -----
     if (p.startsWith('/me')) {
       const s = sessionOf(req, 'customer');
@@ -418,19 +443,67 @@ function createApp(opts = {}) {
       if (limited('slip:' + ctx.ip, 10, 15 * 60e3, t)) return send(res, 429, { error: 'rate' });
       const b = await readBody(req);
       const u = Q('SELECT * FROM staff WHERE username=? AND active=1').get(String(b.username ?? '').trim().toLowerCase().slice(0, 60));
-      if (!u || !checkPass(String(b.password ?? '').slice(0, 200), u.pass)) { audit('staff', u?.id, 'login_failed', null, null, ctx); return send(res, 401, { error: 'creds' }); }
+      if (u && u.locked_until > t) return send(res, 429, { error: 'locked', retryIn: Math.ceil((u.locked_until - t) / 1000) });
+      if (!u || !checkPass(String(b.password ?? '').slice(0, 200), u.pass)) {
+        audit('staff', u?.id, 'login_failed', null, null, ctx);
+        if (u) {
+          const n = u.failed_logins + 1, lock = n >= LOCK_AFTER;
+          Q('UPDATE staff SET failed_logins=?, locked_until=? WHERE id=?').run(lock ? 0 : n, lock ? t + LOCK_MS : 0, u.id);
+          if (lock) { audit('staff', u.id, 'login_locked', null, { minutes: LOCK_MS / 60e3 }, ctx); return send(res, 429, { error: 'locked', retryIn: LOCK_MS / 1000 }); }
+        }
+        return send(res, 401, { error: 'creds' });
+      }
+      if (u.failed_logins || u.locked_until) Q('UPDATE staff SET failed_logins=0, locked_until=0 WHERE id=?').run(u.id);
       const ttl = CFG.STAFF_SESSION_HOURS * H;
       audit('staff', u.id, 'login', null, null, ctx);
-      return send(res, 200, { ok: true, name: u.name, role: u.role }, { 'Set-Cookie': cookie('sq_staff', newSession('staff', u.id, ttl), ttl / 1000, 'Strict') });
+      return send(res, 200, { ok: true, name: u.name, role: roleOf(u) }, { 'Set-Cookie': cookie('sq_staff', newSession('staff', u.id, ttl), ttl / 1000, 'Strict') });
     }
     if (!p.startsWith('/staff/')) return send(res, 404, { error: 'not found' });
     const ss = sessionOf(req, 'staff');
     const staff = ss && Q('SELECT * FROM staff WHERE id=? AND active=1').get(ss.subject_id);
     if (!staff) return send(res, 401, { error: 'login' });
 
-    if (p === '/staff/me' && M === 'GET') return send(res, 200, { name: staff.name, role: staff.role, rules: { required: CFG.STAMPS_REQUIRED, reward: CFG.REWARD_NAME, hours: CFG.MIN_HOURS_BETWEEN_STAMPS } });
+    if (p === '/staff/me' && M === 'GET') return send(res, 200, { name: staff.name, role: roleOf(staff), rules: { required: CFG.STAMPS_REQUIRED, reward: CFG.REWARD_NAME, hours: CFG.MIN_HOURS_BETWEEN_STAMPS } });
     if (p === '/staff/logout' && M === 'POST') { Q('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_staff)); return send(res, 200, { ok: true }, { 'Set-Cookie': cookie('sq_staff', '', 0, 'Strict') }); }
     if (p === '/staff/stream' && M === 'GET') return stream(req, res, 'staff');
+    // menu editing: captain = sold out only, manager/owner = everything (role checks inside menu.js)
+    if (await MENU.staffRoute(p, M, req, res, url, staff, ctx)) return;
+    // staff accounts: owner only
+    if (p.startsWith('/staff/users')) {
+      if (roleOf(staff) !== 'owner') return send(res, 403, { error: 'role' });
+      if (p === '/staff/users' && M === 'GET') return send(res, 200, Q('SELECT id, username, name, role, active, locked_until FROM staff ORDER BY active DESC, role, name').all().map(u => ({ ...u, role: roleOf(u), active: !!u.active, locked: u.locked_until > t })));
+      if (M !== 'POST') return send(res, 404, { error: 'not found' });
+      const b = await readBody(req);
+      const owners = () => Q("SELECT COUNT(*) AS n FROM staff WHERE role='owner' AND active=1").get().n;
+      if (p === '/staff/users') {
+        const username = String(b.username ?? '').trim().toLowerCase(), name = String(b.name ?? '').replace(/\s+/g, ' ').trim(), role = String(b.role ?? '');
+        if (!/^[a-z0-9._-]{3,30}$/.test(username)) return send(res, 400, { error: 'bad', field: 'username' });
+        if (!name || name.length > 60) return send(res, 400, { error: 'bad', field: 'name' });
+        if (!['owner', 'manager', 'captain'].includes(role)) return send(res, 400, { error: 'bad', field: 'role' });
+        if (Q('SELECT 1 FROM staff WHERE username=?').get(username)) return send(res, 409, { error: 'taken' });
+        const pw = setStaff(username, role, name);
+        audit('staff', staff.id, 'staff_add', null, { username, role }, ctx);
+        return send(res, 200, { ok: true, password: pw });   // shown once to the owner, never stored in clear
+      }
+      const u = Number.isInteger(Number(b.id)) && Q('SELECT * FROM staff WHERE id=?').get(Number(b.id));
+      if (!u) return send(res, 404, { error: 'none' });
+      if (p === '/staff/users/reset') {
+        const pw = setStaff(u.username, roleOf(u), u.name);
+        audit('staff', staff.id, 'staff_reset_password', null, { username: u.username }, ctx);
+        return send(res, 200, { ok: true, password: pw });
+      }
+      if (p === '/staff/users/update') {
+        const role = b.role === undefined ? roleOf(u) : String(b.role), active = b.active === undefined ? !!u.active : b.active === true;
+        if (!['owner', 'manager', 'captain'].includes(role)) return send(res, 400, { error: 'bad', field: 'role' });
+        if (u.id === staff.id && (role !== 'owner' || !active)) return send(res, 409, { error: 'self' });     // never lock yourself out
+        if (roleOf(u) === 'owner' && u.active && (role !== 'owner' || !active) && owners() < 2) return send(res, 409, { error: 'last-owner' });
+        Q('UPDATE staff SET role=?, active=?, failed_logins=0, locked_until=0 WHERE id=?').run(role, active ? 1 : 0, u.id);
+        if (!active || role !== roleOf(u)) Q("DELETE FROM sessions WHERE kind='staff' AND subject_id=?").run(u.id);
+        audit('staff', staff.id, 'staff_update', null, { username: u.username, role, active }, ctx);
+        return send(res, 200, { ok: true });
+      }
+      return send(res, 404, { error: 'not found' });
+    }
 
     // captain screen: live table calls (replays the last 12 h on connect) and took/undo updates
     if (p === '/staff/calls/stream' && M === 'GET') {
@@ -480,7 +553,7 @@ function createApp(opts = {}) {
     }
     // owner: memories + next-issue picks (admin only; phones are shown in full so a winner can be contacted)
     if (p === '/staff/memories' && M === 'GET') {
-      if (staff.role !== 'admin') return send(res, 403, { error: 'forbidden' });
+      if (roleOf(staff) !== 'owner') return send(res, 403, { error: 'forbidden' });
       const since = +url.searchParams.get('since') || 0;
       const rows = Q('SELECT m.*, c.phone FROM memories m JOIN customers c ON c.id=m.customer_id WHERE m.created_at>=? ORDER BY m.id DESC LIMIT 2000').all(since);
       audit('staff', staff.id, 'memories_export', null, { count: rows.length }, ctx);
@@ -488,7 +561,7 @@ function createApp(opts = {}) {
     }
     const smp = /^\/staff\/memories\/(\d+)\/photo$/.exec(p);
     if (smp && M === 'GET') {
-      if (staff.role !== 'admin') return send(res, 403, { error: 'forbidden' });
+      if (roleOf(staff) !== 'owner') return send(res, 403, { error: 'forbidden' });
       return sendPhoto(res, Q('SELECT photo FROM memories WHERE id=?').get(+smp[1]));
     }
     if (p === '/staff/customer' && M === 'GET') {
@@ -551,7 +624,8 @@ function createApp(opts = {}) {
   });
 
   function setStaff(username, role, name, password) {
-    if (!['captain', 'admin'].includes(role)) throw new Error('role must be captain or admin');
+    if (role === 'admin') role = 'owner';   // old name of the top role
+    if (!['owner', 'manager', 'captain'].includes(role)) throw new Error('role must be owner, manager or captain');
     const pw = password || crypto.randomBytes(6).toString('base64url');
     Q(`INSERT INTO staff(username,name,pass,role) VALUES(?,?,?,?) ON CONFLICT(username) DO UPDATE SET pass=excluded.pass, role=excluded.role, name=excluded.name, active=1`)
       .run(username.toLowerCase(), name || username, hashPass(pw), role);
@@ -560,7 +634,7 @@ function createApp(opts = {}) {
     Q("DELETE FROM sessions WHERE kind='staff' AND subject_id=?").run(u.id);
     return pw;
   }
-  return { server, db, setStaff, tableSig };
+  return { server, db, setStaff, tableSig, menu: MENU };
 }
 
 module.exports = { createApp };
@@ -591,8 +665,15 @@ if (require.main === module) {
   }
   if (process.argv[2] === 'set-staff') {
     const [, , , username, role = 'captain', name, pw] = process.argv;
-    if (!username) { console.log('usage: node server.js set-staff <username> <captain|admin> "<name>" [password]'); process.exit(1); }
-    console.log(`User: ${username}\nPassword: ${app.setStaff(username, role, name, pw)}\nRole: ${role}`);
+    if (!username) { console.log('usage: node server.js set-staff <username> <owner|manager|captain> "<name>" [password]'); process.exit(1); }
+    console.log(`User: ${username}\nPassword: ${app.setStaff(username, role, name, pw)}\nRole: ${role === 'admin' ? 'owner' : role}`);
+    process.exit(0);
+  }
+  // one-time: load the built-in menu (assets/menu.js) into the database and publish it. Skips if a menu exists; --force replaces it.
+  if (process.argv[2] === 'menu-import') {
+    const file = process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : path.join(__dirname, '..', '..', 'assets', 'menu.js');
+    const r = app.menu.importFrom(file, { force: process.argv.includes('--force') });
+    console.log(r.skipped ? 'Menu already in the database: nothing imported (use --force to replace it).' : `Imported ${r.sections} sections, ${r.items} items, and published them.`);
     process.exit(0);
   }
   if (process.argv[2] === 'setup-link') {

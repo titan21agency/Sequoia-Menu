@@ -61,6 +61,8 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now sequoia-loyalty
 systemctl restart sequoia-loyalty
+echo "==> Menu in the database (first run only: copies the built-in menu and publishes it; later runs change nothing)"
+( set -a; . "$ENVF"; set +a; sudo -E -u sequoia node "$APP/apps/loyalty/server.js" menu-import )
 
 echo "==> Restart on new code (the payroll job pulls /opt/titan-apps every 5 minutes)"
 cat > /usr/local/bin/sequoia-loyalty-update <<'UPD'
@@ -115,5 +117,6 @@ CADDY
 caddy validate --config /etc/caddy/Caddyfile >/dev/null
 systemctl reload caddy
 
-echo "==> Done. Create captain logins with:"
-echo "    set -a; . ${ENVF}; set +a; sudo -E -u sequoia node ${APP}/apps/loyalty/server.js set-staff <username> captain \"<name>\""
+echo "==> Done. Create logins with (role: owner, manager or captain; old 'admin' logins are now owners):"
+echo "    set -a; . ${ENVF}; set +a; sudo -E -u sequoia node ${APP}/apps/loyalty/server.js set-staff <username> <role> \"<name>\""
+echo "    The owner can then add and manage staff from the admin page."
