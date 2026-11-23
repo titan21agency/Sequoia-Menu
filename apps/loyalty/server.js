@@ -627,7 +627,7 @@ function createApp(opts = {}) {
     if (role === 'admin') role = 'owner';   // old name of the top role
     if (!['owner', 'manager', 'captain'].includes(role)) throw new Error('role must be owner, manager or captain');
     const pw = password || crypto.randomBytes(6).toString('base64url');
-    Q(`INSERT INTO staff(username,name,pass,role) VALUES(?,?,?,?) ON CONFLICT(username) DO UPDATE SET pass=excluded.pass, role=excluded.role, name=excluded.name, active=1`)
+    Q(`INSERT INTO staff(username,name,pass,role) VALUES(?,?,?,?) ON CONFLICT(username) DO UPDATE SET pass=excluded.pass, role=excluded.role, name=excluded.name, active=1, failed_logins=0, locked_until=0`)
       .run(username.toLowerCase(), name || username, hashPass(pw), role);
     // a new password signs the user out everywhere
     const u = Q('SELECT id FROM staff WHERE username=?').get(username.toLowerCase());

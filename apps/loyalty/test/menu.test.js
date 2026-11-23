@@ -174,7 +174,12 @@ test('staff: 5 wrong passwords lock that account for 15 minutes', async () => {
     assert.equal(locked.status, 429); assert.equal(locked.body.error, 'locked');
     assert.equal((await s('POST', '/staff/login', { username: 'mgr', password: 'pass-1234' })).status, 429);   // right password, still locked
     assert.equal((await t.jar()('POST', '/staff/login', { username: 'cap', password: 'pass-1234' })).status, 200);   // other accounts unaffected
+    // a new password (owner page or set-staff on the server) lifts the lock at once
+    const pw = t.app.setStaff('mgr', 'manager', 'Mona', 'pass-1234-new');
+    assert.equal((await s('POST', '/staff/login', { username: 'mgr', password: pw })).status, 200);
+    for (let i = 0; i < 5; i++) await s('POST', '/staff/login', { username: 'mgr', password: 'wrong-again-' + i });
     t.tick(15 * 60e3 + 1000);
+    t.app.setStaff('mgr', 'manager', 'Mona', 'pass-1234');
     assert.equal((await s('POST', '/staff/login', { username: 'mgr', password: 'pass-1234' })).status, 200);
   } finally { t.close(); }
 });

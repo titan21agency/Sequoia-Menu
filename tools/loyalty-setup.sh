@@ -61,6 +61,7 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now sequoia-loyalty
 systemctl restart sequoia-loyalty
+sleep 3   # let the restarted API finish its one-time database upgrade before the import opens the database
 echo "==> Menu in the database (first run only: copies the built-in menu and publishes it; later runs change nothing)"
 ( set -a; . "$ENVF"; set +a; sudo -E -u sequoia node "$APP/apps/loyalty/server.js" menu-import )
 
