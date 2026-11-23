@@ -10,6 +10,7 @@ Node 22+, no npm dependencies (same approach as `apps/payroll`). SQLite file in 
 | `server.js` | API under `/api/*`, SSE live updates, staff CLI |
 | `../../assets/account.js` | Customer **حسابي** + card (lazy-loaded from the menu) |
 | `../../assets/captain-card.js` | Captain **كارت سيكويا** tab (lazy-loaded) |
+| `../../assets/memory.js` | Customer **كنت هنا** memory card + Instagram story (lazy-loaded) |
 
 ## Run locally
 ```bash
@@ -48,6 +49,17 @@ Setup in Message Pro → Account settings → Integrations → Webhooks → *Add
 With `NODE_ENV=production` the server refuses to start without `WHATSAPP_PROVIDER` (the dev stub only prints codes to the console).
 
 **Message Pro notes.** The Sequoia WhatsApp channel is a WhatsApp Web session, not Meta Cloud, so there are no templates; each code is a normal outgoing message in the customer's conversation (reused if one is open). The `open` workflow assigns new conversations to *Sequoia Assistant*: OTP conversations will show in the inbox and the AI may reply if the customer answers. Many unsolicited messages from a WhatsApp Web number can get it restricted by WhatsApp, which is why per-phone and per-IP limits stay strict.
+
+## كنت هنا (memory cards for the journal)
+`assets/memory.js` (lazy-loaded from the journal section on the cover, or directly at `<menu>/#kont-hena` for a table QR). The customer logs in with the same OTP, fills the memory card (who they were with, drink, song, sky colour, a quote) and their picks for the next issue (book, film, song, story), adds a photo, and gets a 1080×1920 Instagram story drawn on the phone (share sheet or save). Every card is saved in `memories`.
+
+- **Photos are uploaded only with consent** (checkbox on the photo step). Without it the photo never leaves the phone. Stored photos live in `$LOYALTY_DATA/memory-photos/`; deleting a memory deletes its photo.
+- Customer API: `GET/POST /api/me/memories`, `GET /api/me/memories/<id>/photo`, `DELETE /api/me/memories/<id>`.
+- Owner (admin staff only): `GET /api/staff/memories?since=<ms>`, `GET /api/staff/memories/<id>/photo`.
+- Export for planning the next issue (Excel-ready CSV with phones):
+  ```bash
+  NODE_NO_WARNINGS=1 node apps/loyalty/server.js memories-export > memories.csv
+  ```
 
 ## Security (Phase 2)
 - **Table calls** (call waiter / bill / request) go to this server (`POST /api/calls`), not ntfy.sh. The captain screen reads them from `GET /api/staff/calls/stream` (staff session, last 12 h replayed). Took/undo: `POST /api/staff/calls`.
