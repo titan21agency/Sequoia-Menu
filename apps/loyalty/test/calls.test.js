@@ -110,3 +110,29 @@ test('report: staff-only proxy to the sheet; token added server-side', async () 
     assert.deepEqual(sent, [{ u: 'https://sheet.example/exec', body: { token: 'tok-123', by: 'cap', rows: [{ rid: 'a', table: '7' }] } }]);
   } finally { t.close(); }
 });
+test('calls: undo items are cleaned before they reach captain screens', async () => {
+  const t = await setup();
+  try {
+    const s = t.jar();
+    assert.equal((await s('POST', '/staff/login', { username: 'cap', password: 'pass-1234' })).status, 200);
+    const evil = [{ rid: 'r1', kind: '"><img src=x onerror=alert(1)>', detail: 'x'.repeat(500), time: 'nope', extra: 1 }, { kind: 'call' }, 'junk'];
+    const got = await t.readStream(s.cookie(), 1, () => s('POST', '/staff/calls', { type: 'undo', table: '4', calls: evil }));
+    const calls = got.msgs[0].body.calls;
+    assert.equal(calls.length, 1);
+    assert.deepEqual(Object.keys(calls[0]).sort(), ['detail', 'kind', 'rid', 'time']);
+    assert.equal(calls[0].kind, 'call');
+    assert.equal(calls[0].detail.length, 80);
+    assert.equal(typeof calls[0].time, 'number');
+  } finally { t.close(); }
+});
+test('staff: a password reset ends that user\'s open sessions', async () => {
+  const t = await setup();
+  try {
+    const s = t.jar();
+    assert.equal((await s('POST', '/staff/login', { username: 'cap', password: 'pass-1234' })).status, 200);
+    assert.equal((await s('GET', '/staff/me')).status, 200);
+    t.app.setStaff('cap', 'captain', 'Kareem', 'pass-1234-new');
+    assert.equal((await s('GET', '/staff/me')).status, 401);
+    assert.equal((await s('POST', '/staff/login', { username: 'cap', password: 'pass-1234-new' })).status, 200);
+  } finally { t.close(); }
+});
