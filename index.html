@@ -330,6 +330,11 @@ a.press:focus-visible,.fb:focus-visible{outline:2px solid var(--focus);outline-o
 /* dock: "Ready to order" is the one primary; "Other requests" is secondary (outline); a status is a sentence, not capitals */
 .call.other{background:transparent;color:var(--cream);border:1.5px solid rgba(244,238,226,.55);box-shadow:none}
 .call.sent{text-transform:none;letter-spacing:.01em}
+/* sold out: still listed (guests see it exists), faded and labelled; the label keeps full contrast */
+.item.out .nm{color:rgba(31,42,68,.55)}
+.item.out .pr{color:rgba(31,42,68,.45);text-decoration:line-through}
+.so{display:inline-block;margin-inline-start:8px;padding:2px 9px;border-radius:999px;background:var(--navy);color:var(--cream);font-size:12px;font-weight:600;line-height:1.5;vertical-align:2px}
+.pvbar{position:fixed;top:0;left:0;right:0;z-index:50;padding:calc(env(safe-area-inset-top,0px) + 6px) 16px 6px;background:var(--focus);color:var(--navy-deep);text-align:center;font-size:13px;font-weight:600}
 </style>
 </head>
 <body>

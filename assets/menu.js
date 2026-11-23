@@ -44,7 +44,8 @@
       pick1: 'Pick a track,', pick2: 'we\'ll press play.', prices: 'All prices in EGP', egp: 'EGP',
       sideA: 'SIDE A', sideB: 'SIDE B', track: 'TRACK', rewind: '‹ Rewind', next: 'Next track ›', trackList: 'Track list', finish: 'Finish',
       endB: 'End of side B', thanks: 'THANK YOU', again: 'PLAY IT AGAIN', toggle: 'ع', toggleLabel: 'عربي',
-      backCover: 'Back to cover', sections: 'Menu sections', close: 'Close'
+      backCover: 'Back to cover', sections: 'Menu sections', close: 'Close',
+      soldOut: 'Sold out', preview: 'Draft preview · guests don’t see these changes yet'
     },
     ar: {
       est: 'من 2026 · المنصورة', tagline: 'قهوة على النيل<br>ومود حلو', open: 'شغّل المنيو',
@@ -52,7 +53,8 @@
       pick1: 'اختار تراك،', pick2: 'وإحنا نشغّل.', prices: 'كل الأسعار بالجنيه', egp: 'جنيه',
       sideA: 'الوش الأول', sideB: 'الوش التاني', track: 'تراك', rewind: '› رجوع', next: 'التراك اللي بعده ‹', trackList: 'قايمة التراكات', finish: 'النهاية',
       endB: 'خلص الوش التاني', thanks: 'نورتنا', again: 'شغّله تاني', toggle: 'EN', toggleLabel: 'English',
-      backCover: 'رجوع للبداية', sections: 'أقسام المنيو', close: 'قفل'
+      backCover: 'رجوع للبداية', sections: 'أقسام المنيو', close: 'قفل',
+      soldOut: 'خلص', preview: 'معاينة المسودة · الزباين لسه مش شايفين التعديلات دي'
     }
   };
   var lang = 'en';
@@ -155,7 +157,8 @@
       return (g.label ? '<div class="group">' + esc(gl(g)) + '</div>' : '') +
         g.items.map(function (it) {
           var d = Math.min(n++ * 35, 420);
-          return '<div class="item in" style="animation-delay:' + d + 'ms"><span class="nm">' + esc(nm(it)) + '</span><span class="dots" aria-hidden="true"></span><span class="pr">' + it[1] + '</span></div>';
+          var out = it[3] != null && SOLD[it[3]];   // sold out: still listed, faded, with a label
+          return '<div class="item in' + (out ? ' out' : '') + '" style="animation-delay:' + d + 'ms"><span class="nm">' + esc(nm(it)) + (out ? '<span class="so">' + T('soldOut') + '</span>' : '') + '</span><span class="dots" aria-hidden="true"></span><span class="pr">' + esc(it[1]) + '</span></div>';
         }).join('');
     }).join('');
     var prevLabel = i === 0 ? T('trackList') : st(SECTIONS[i - 1]);
@@ -441,10 +444,12 @@
 
   // chapter to chapter: swap only the header and the list, keep the screen, chips and dock (no reload feel)
   var shownLang = null;
-  function swapSection(i) {
+  // force: redraw the same section in place (new prices / sold out), keeping the scroll position
+  function swapSection(i, force) {
     var cur = app.querySelector('.screen[data-sec]');
     if (!cur || shownLang !== lang) return false;
-    if (+cur.getAttribute('data-sec') === i) return true;   // already showing it (hashchange + popstate both fire)
+    if (!force && +cur.getAttribute('data-sec') === i) return true;   // already showing it (hashchange + popstate both fire)
+    var y = force ? cur.querySelector('.scroll').scrollTop : 0;
     var tpl = document.createElement('template');
     tpl.innerHTML = section(i);
     var nx = tpl.content.firstElementChild;
@@ -452,8 +457,9 @@
     cur.querySelector('.bar').replaceWith(nx.querySelector('.bar'));
     var sc = nx.querySelector('.scroll');
     [].forEach.call(sc.querySelectorAll('.in'), function (el) { el.classList.remove('in'); el.style.animationDelay = ''; });
-    sc.classList.add('swap');
+    if (!force) sc.classList.add('swap');
     cur.querySelector('.scroll').replaceWith(sc);
+    if (force) sc.scrollTop = y;
     var chips = cur.querySelector('#chips');
     [].forEach.call(chips.querySelectorAll('[data-go]'), function (c, j) { c.setAttribute('aria-current', String(j === i)); });
     var on = chips.querySelector('[aria-current="true"]');
@@ -522,6 +528,43 @@
     return SequoiaOrders.publish({ type: 'req', table: table, item: ('song:' + title).slice(0, 80), rid: at.toString(36) + Math.random().toString(36).slice(2, 6) })
       .then(function () { return 'sent'; });
   };
+  // ---- live menu: the published menu + sold out from the server. The list at the top of this file is only the
+  // fallback for a first visit without a connection; the last menu seen is kept on the phone for the next visit.
+  var SOLD = {}, menuKey = null, fetching = false;
+  var PREVIEW = /[?&]preview=1(&|$)/.test(location.search);   // staff: the draft, from the admin page
+  function applyMenu(m, quiet) {
+    if (!m || !Array.isArray(m.sections) || !m.sections.length) return false;
+    var key = JSON.stringify([m.sections, m.soldOut]);
+    if (key === menuKey) return false;
+    menuKey = key; SECTIONS = m.sections; SOLD = {};
+    (m.soldOut || []).forEach(function (id) { SOLD[id] = 1; });
+    if (!quiet) refreshScreen();
+    return true;
+  }
+  function refreshScreen() {
+    var m = /^#s-(\d+)$/.exec(location.hash);
+    if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length) { if (!swapSection(+m[1] - 1, true)) render(); }
+    else if (m || location.hash === '#tracks') render();   // counts on the track list; a section that is gone falls back
+  }
+  function fetchMenu() {
+    if (fetching || !window.fetch) return;
+    fetching = true;
+    fetch(PREVIEW ? '/api/staff/menu/preview' : '/api/menu', { credentials: 'same-origin', cache: 'no-cache' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (m) { if (applyMenu(m) && !PREVIEW) { try { localStorage.setItem('sq-menu', JSON.stringify(m)); } catch (_) {} } })
+      .catch(function () {})
+      .then(function () { fetching = false; });
+  }
+  if (!PREVIEW) { try { applyMenu(JSON.parse(localStorage.getItem('sq-menu')), true); } catch (_) {} }
+  if (PREVIEW) {
+    var pv = document.createElement('div'); pv.className = 'pvbar'; pv.setAttribute('role', 'status');
+    pv.textContent = T('preview'); document.body.appendChild(pv);
+  }
+  // first check after the page has loaded (the cover paints first), then every 30 s while open and on return
+  if (document.readyState === 'complete') setTimeout(fetchMenu, 0); else window.addEventListener('load', function () { setTimeout(fetchMenu, 0); });
+  setInterval(function () { if (!document.hidden) fetchMenu(); }, 30000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) fetchMenu(); });
+
   window.addEventListener('hashchange', render);
   window.addEventListener('popstate', render);
   render();

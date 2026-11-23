@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 const root = path.join(__dirname, '..');
-const read = f => fs.readFileSync(path.join(root, f), 'utf8');
+const read = f => fs.readFileSync(path.join(root, f), 'utf8').split('\r\n').join('\n');   // Windows checkouts use CRLF
 
 // ---- live CSS (menu) -> scoped for a shadow root: :root becomes :host, page-level rules dropped ----
 const css = read('index.html').match(/<style>([\s\S]*?)<\/style>/)[1]
