@@ -12,7 +12,7 @@
 
   var TXT = {
     ar: { more: 'كمان من سيكويا',
-          jH: 'جريدة سيكويا', jNew: 'العدد الجديد', jSoon: 'قريبًا', jSoonTitle: 'العدد الأول في الطريق', jRead: 'اقرا الجريدة', jMem: 'سجّل ذكرى', mH: 'كنت هنا', mTitle: 'ذكرى من على النيل', jMemSub: 'احكي زيارتك في كارت، ضيف صورتك، وخدها ستوري على إنستجرام.',
+          jH: 'جريدة سيكويا', jNew: 'العدد الجديد', jSoon: 'قريبًا', jSoonTitle: 'العدد الأول في الطريق', jRead: 'اقرا الجريدة', jMem: 'سجّل ذكرى', mH: 'كنت هنا', mTitle: 'ذكرى من على النيل', jMemSub: 'سجّل ذكرى زيارتك، وأضف صورة من قعدتك، واحصل عليها في تصميم ستوري جاهز للمشاركة.',
           pages: function (n) { return n + ' صفحة'; },
           cH: 'فعاليات سيكويا', cSoon: '', cSub: '',
           cIntro: 'مواعيد الموسم على شط النيل.. السما بتعمل العرض.',
@@ -23,7 +23,7 @@
           page: function (a, b) { return 'صفحة ' + a + ' من ' + b; }, hint: 'اسحب الصفحة أو دوس على طرفها علشان تقلبها',
           close: 'قفل', prev: 'الصفحة اللي قبلها', next: 'الصفحة اللي بعدها' },
     en: { more: 'More from Sequoia',
-          jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal', jMem: 'Save a memory', mH: 'I was here', mTitle: 'A memory by the Nile', jMemSub: 'Write your visit on a card, add your photo, and get it as an Instagram story.',
+          jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal', jMem: 'Save a memory', mH: 'I was here', mTitle: 'A memory by the Nile', jMemSub: 'Save a memory of your visit, add a photo from your table, and get it as a story ready to share.',
           pages: function (n) { return n + ' pages'; },
           cH: 'Sequoia Events', cSoon: '', cSub: '',
           cIntro: 'This season by the Nile. The sky puts on the show.',

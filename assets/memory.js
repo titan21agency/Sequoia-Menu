@@ -1,9 +1,9 @@
 /*
- * كنت هنا — a customer saves a memory of their visit and gets it back as an Instagram story (1080×1920).
+ * كنت هنا — a customer saves a memory of their visit and gets it back as a story design (1080×1920).
  * Two parts: the memory card (what happened + picks for the next journal issue) and their photo.
  * Loaded only when "كنت هنا" is tapped (assets/landing.js) or the page opens on #kont-hena.
- * Needs the Sequoia Card login (same OTP endpoints as assets/account.js). The photo is uploaded only if
- * the customer agrees; otherwise it stays on the phone and is used only to draw the story.
+ * Needs the Sequoia Card login (same OTP endpoints as assets/account.js). The story is drawn on the phone.
+ * The customer's original photo is never uploaded; only the finished story design is, and only if they agree.
  */
 (function () {
   'use strict';
@@ -123,7 +123,7 @@
     if (s.view === 'card') {
       var sk = skyOf(s.f.sky);
       return '<h2 id="mem-title">كنت هنا</h2>' +
-        '<p class="sub">احكي زيارتك في كارت، ضيف صورتك، وخدها ستوري على إنستجرام.</p>' + steps('card') +
+        '<p class="sub">سجّل ذكرى زيارتك، وأضف صورة من قعدتك، واحصل عليها في تصميم ستوري جاهز للمشاركة.</p>' + steps('card') +
         '<div class="mem-card"><span class="sc" aria-hidden="true">✂</span>' +
           field('visit_date', 'التاريخ', '') +
           field('with_whom', 'كنت مع', 'مين كان معاك؟') +
@@ -150,12 +150,12 @@
 
     if (s.view === 'photo') {
       return '<h2 id="mem-title">صورتك من المكان</h2>' +
-        '<p class="sub">صورة ليك أو للشلة أو للنيل من ترابيزتك. هتتحط في الستوري زي صورة بولارويد.</p>' + steps('photo') +
+        '<p class="sub">صورة لك أو لأصحابك أو للنيل من ترابيزتك، وهتظهر في التصميم على شكل صورة بولارويد.</p>' + steps('photo') +
         '<label class="mem-drop" for="mem-file">' +
           (s.photo ? '<img src="' + s.photo + '" alt="الصورة اللي اخترتها">' + '<span class="note">دوس هنا لو عاوز تغيّرها</span>'
                    : '<svg width="44" height="44" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-2.5h6L17 8h3v11H4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><b>ضيف صورة</b><span class="note">من الكاميرا أو من الصور</span>') +
         '</label><input id="mem-file" type="file" accept="image/*" hidden>' +
-        '<label class="mem-check"><input type="checkbox" id="mem-consent"' + (s.f.consent ? ' checked' : '') + '><span>موافق إن سيكويا تحتفظ بالصورة والحكاية، وممكن تنشرها في الجرنال. <span class="note">لو مش موافق، الصورة مش هتترفع خالص وهتستخدم بس على موبايلك علشان الستوري.</span></span></label>' +
+        '<label class="mem-check"><input type="checkbox" id="mem-consent"' + (s.f.consent ? ' checked' : '') + '><span>أوافق على احتفاظ سيكويا بتصميم الذكرى وإمكانية نشره في جرنال سيكويا. <span class="note">في حالة عدم الموافقة، يظل التصميم على هاتفك فقط. صورتك الأصلية لا يتم حفظها في أي حالة.</span></span></label>' +
         '<div class="mem-msg" role="alert">' + esc(s.err) + '</div>' +
         '<button class="mem-btn" type="button" data-make' + (s.busy ? ' disabled' : '') + '>' + (s.busy ? 'بنحفظ ذكراك…' : 'احفظ الذكرى واعمل الستوري') + '</button>' +
         (s.photo ? '' : '<button class="mem-link" type="button" data-make>كمّل من غير صورة</button>');
@@ -164,7 +164,7 @@
     if (s.view === 'story') {
       var share = !!(navigator.canShare && s.storyBlob && navigator.canShare({ files: [new File([s.storyBlob], 'sequoia.jpg', { type: 'image/jpeg' })] }));
       return '<h2 id="mem-title">ذكراك جاهزة</h2>' +
-        '<p class="sub">اتحفظت في حسابك. شاركها ستوري، ومتنساش تعمل منشن لـ<span dir="ltr">' + esc(handle()) + '</span>.</p>' + steps('story') +
+        '<p class="sub">ذكراك اتسجلت في حسابك. شاركها ستوري ومنشن <span dir="ltr">' + esc(handle()) + '</span>.</p>' + steps('story') +
         (s.story ? '<img class="mem-story" src="' + s.story + '" alt="ستوري كنت هنا من سيكويا">' : '<p class="sub">بنرسم الستوري…</p>') +
         '<div class="mem-msg" role="alert">' + esc(s.err) + '</div>' +
         (share ? '<button class="mem-btn" type="button" data-share>شارك على الستوري</button>' : '') +
@@ -242,14 +242,34 @@
     if (!filled()) { state.view = 'card'; state.err = MSG.empty; return paint(); }
     state.busy = true; state.err = ''; paint();
     var body = {}; for (var k in state.f) body[k] = state.f[k];
-    if (state.photo && state.f.consent) body.photo = state.photo;
-    call('POST', '/me/memories', body).then(function (j) {
-      state.busy = false;
-      if (j.status === 401) { state.view = 'phone'; return paint(); }
-      if (j.status !== 200) { state.err = MSG[j.error] || MSG.save; return paint(); }
-      state.saved = j.item; state.list.unshift(j.item);
-      showStory(j.item, state.photo);
-    }, function () { state.busy = false; state.err = MSG.net; paint(); });
+    draw(body, state.photo).then(function (c) {
+      // the finished design is uploaded only with consent; the customer's own photo never leaves the phone
+      if (state.f.consent) body.photo = jpegUnder(c, 1.4e6);
+      return call('POST', '/me/memories', body).then(function (j) {
+        state.busy = false;
+        if (j.status === 401) { state.view = 'phone'; return paint(); }
+        if (j.status !== 200) { state.err = MSG[j.error] || MSG.save; return paint(); }
+        state.saved = j.item; state.list.unshift(j.item);
+        ready(c);
+      });
+    }).catch(function () { state.busy = false; state.err = MSG.net; paint(); });
+  }
+  // keep the uploaded design under the server's size limit
+  function jpegUnder(c, max) {
+    var q = 0.88, d = c.toDataURL('image/jpeg', q);
+    while (d.length * 0.75 > max && q > 0.5) { q -= 0.08; d = c.toDataURL('image/jpeg', q); }
+    return d;
+  }
+  function ready(c) {
+    state.view = 'story'; state.story = c.toDataURL('image/jpeg', 0.9); state.storyBlob = null; paint();
+    c.toBlob(function (b) { state.storyBlob = b; paint(); }, 'image/jpeg', 0.9);
+  }
+  // an older memory: show the saved design if there is one, otherwise redraw it from the card (no photo)
+  function showSaved(m) {
+    if (!m.photo) return showStory(m, null);
+    var url = API + '/me/memories/' + m.id + '/photo';
+    state.view = 'story'; state.story = url; state.storyBlob = null; paint();
+    fetch(url, { credentials: 'same-origin' }).then(function (r) { return r.ok ? r.blob() : null; }).then(function (b) { if (b) { state.storyBlob = b; paint(); } }, function () {});
   }
   function showStory(item, photo) {
     state.view = 'story'; state.story = null; state.storyBlob = null; paint();
@@ -372,7 +392,7 @@
     if (t.closest('[data-edit]')) { state.view = 'phone'; state.err = ''; return paint(); }
     if ((b = t.closest('[data-old]'))) {
       var m = state.list[+b.getAttribute('data-old')];
-      if (m) showStory(m, m.photo ? API + '/me/memories/' + m.id + '/photo' : null);
+      if (m) showSaved(m);
     }
   }
   function onInput(e) {
