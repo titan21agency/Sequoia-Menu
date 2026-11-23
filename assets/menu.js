@@ -143,7 +143,7 @@
     var nextLabel = i === last ? T('finish') : st(SECTIONS[i + 1]);
     var prevGo = i === 0 ? '#tracks' : '#s-' + i;
     var nextGo = i === last ? '#thanks' : '#s-' + (i + 2);
-    return '<section class="screen">' +
+    return '<section class="screen" data-sec="' + i + '">' +
       '<div class="bar">' +
         '<button class="press ghost caps" data-go="#tracks" style="font-size:14px;letter-spacing:.18em">' + CHEV_L + '<span>' + T('menu') + '</span></button>' +
         '<span class="wordmark"><img src="assets/tree-cream.webp" alt="" style="width:16px;height:auto"><span class="wm" style="font-size:19px">SEQUOIA</span></span>' +
@@ -181,7 +181,7 @@
   var PAY = [['cash', 'Cash', 'كاش'], ['card', 'Card', 'كارت'], ['instapay', 'InstaPay', 'InstaPay']];
   var QUICK = [['water', 'Water', 'مياه'], ['napkins', 'Napkins', 'مناديل'], ['clean', 'Clean table', 'تنضيف الترابيزة']]; // edit quick requests here: [code, English, Arabic]
   var SV = {
-    en: { ready: 'Ready to order', service: 'AT YOUR SERVICE', help: 'How can we help?', table: 'Table', bill: 'Ask for the bill', quick: 'Quick requests',
+    en: { ready: 'Ready to order', other: 'Other requests', service: 'AT YOUR SERVICE', help: 'How can we help?', table: 'Table', bill: 'Ask for the bill', quick: 'Quick requests',
           captainComing: 'Captain is coming', billComing: 'Bill is coming', isComing: ' is coming', tableW: 'Table',
           onWay: 'On the way!', heading: function (t) { return 'The captain is heading to table ' + t + '.'; },
           billTitle: 'Your bill is coming', paying: function (p, t) { return 'Paying by ' + p + ' · table ' + t + '.'; },
@@ -189,7 +189,7 @@
           fbTitle: 'How was your visit?', fbLine: 'Tell us in 2 minutes — it goes straight to the owner.',
           more: 'Anything else?', back: 'Back to menu', needTable: 'Please enter your table number.',
           fail: 'Couldn\'t reach the captain. Check your connection and try again.' },
-    ar: { ready: 'جاهزين نطلب', service: 'في خدمتك', help: 'نقدر نساعدك إزاي؟', table: 'الترابيزة', bill: 'اطلب الحساب', quick: 'طلبات سريعة',
+    ar: { ready: 'جاهزين نطلب', other: 'طلبات تانية', service: 'في خدمتك', help: 'نقدر نساعدك إزاي؟', table: 'الترابيزة', bill: 'اطلب الحساب', quick: 'طلبات سريعة',
           captainComing: 'الكابتن جاي', billComing: 'الحساب جاي', isComing: ' جاية', tableW: 'ترابيزة',
           onWay: 'الكابتن جاي!', heading: function (t) { return 'الكابتن في الطريق لترابيزة ' + t + '.'; },
           billTitle: 'الحساب جاي', paying: function (p, t) { return 'الدفع ' + p + ' · ترابيزة ' + t + '.'; },
@@ -226,13 +226,32 @@
     return esc(label(s.kind, s.detail)) + V('isComing') + tt;
   }
 
+  // two buttons: "Ready to order" calls the captain at once; "Other requests" opens the sheet (bill, water, ...)
+  var dockErr = '';
   function dock() {
     if (!table) return '';
-    var s = last && Date.now() - last.at < COOLDOWN ? last : null;
-    return '<div class="dock">' + (s
-      ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(s) + '</span></button>'
-      : '<button class="press call caps" data-call>' + BELL + '<span>' + V('ready') + '</span></button>') +
-      '</div>';
+    var c = fresh('call'), s = last && Date.now() - last.at < COOLDOWN && last.kind !== 'call' ? last : null;
+    return '<div class="dock">' +
+      (dockErr ? '<div class="dmsg" role="alert">' + esc(dockErr) + '</div>' : '') +
+      '<div class="drow">' + (c
+        ? '<button class="press call sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(c) + '</span></button>'
+        : '<button class="press call caps" data-ready>' + BELL + '<span>' + V('ready') + '</span></button>') +
+      (s
+        ? '<button class="press call other sent caps" data-call><span class="dot" aria-hidden="true"></span><span>' + dockText(s) + '</span></button>'
+        : '<button class="press call other caps" data-call><span>' + V('other') + '</span></button>') +
+      '</div></div>';
+  }
+  function repaintDock() {
+    var d = app.querySelector('.dock');
+    if (d) d.outerHTML = dock();
+  }
+  var dockTimer = null;
+  function readyNow() {
+    if (!table || fresh('call')) return;
+    var b = app.querySelector('[data-ready]');
+    if (b) b.disabled = true;
+    dockErr = '';
+    send('call');
   }
 
   var sheet = document.createElement('div');
@@ -248,8 +267,7 @@
   function closeSheet() {
     sheet.hidden = true;
     clearInterval(tick); tick = null;
-    var d = app.querySelector('.dock');
-    if (d) d.outerHTML = dock();
+    repaintDock();
   }
 
   function optBtn(attr, text, k) {
@@ -275,12 +293,10 @@
         '<button class="press btn-primary caps" data-back style="margin-top:18px"><span>' + V('more') + '</span></button>' +
         '<button class="press linkbtn caps" data-close>' + V('back') + '</button>';
     } else {
-      var c = fresh('call');
       html = '<span class="pill">' + V('service') + '</span>' +
         '<h2 id="sheet-title">' + V('help') + '</h2>' +
         '<div class="trow"><span class="tlabel caps">' + V('table') + '</span><span class="tfixed">' + esc(table) + '</span></div>' +
         '<div class="msg" id="tmsg" role="alert">' + (error ? esc(error) : '') + '</div>' +
-        '<button class="press btn-primary caps" data-send="call"' + (c ? ' disabled' : '') + '>' + BELL + '<span>' + (c ? V('captainComing') + ' · <span id="cd" dir="ltr">' + mmss(Math.ceil((COOLDOWN - (Date.now() - c.at)) / 1000)) + '</span>' : V('ready')) + '</span></button>' +
         '<span class="olabel caps">' + V('bill') + '</span>' +
         '<div class="opts">' + PAY.map(function (p) { return optBtn('data-send="bill" data-detail="' + p[0] + '"', p[li()], 'bill'); }).join('') + '</div>' +
         '<span class="olabel caps">' + V('quick') + '</span>' +
@@ -305,11 +321,17 @@
       '</div>';
   }
 
+  // put the dock back to normal when the cooldown ends
+  function armDock() {
+    clearTimeout(dockTimer);
+    dockTimer = setTimeout(function () { if (sheet.hidden) repaintDock(); }, COOLDOWN + 500);
+  }
   function send(kind, detail) {
     var key = kind === 'req' ? 'req:' + detail : kind;
     if (fresh(key)) return;
     var v = table;
     if (!v) return;
+    var direct = sheet.hidden;   // "Ready to order" from the dock: no sheet, the dock shows the result
     sheet.querySelectorAll('[data-send]').forEach(function (b) { b.disabled = true; });
     var at = Date.now(), msg = { type: kind, table: v, rid: at.toString(36) + Math.random().toString(36).slice(2, 6) };
     if (kind === 'bill') msg.pay = detail;
@@ -320,9 +342,11 @@
       sent[key] = rec; last = rec;
       Object.keys(sent).forEach(function (k) { if (!fresh(k)) delete sent[k]; });
       store('sq-sent', sent); store('sq-last', last);
+      if (direct) { dockErr = ''; repaintDock(); armDock(); return; }
       view = rec; paintSheet();
       if (kind === 'bill') openReview();
     }).catch(function () {
+      if (direct) { dockErr = V('fail'); repaintDock(); return; }
       paintSheet(V('fail'));
     });
   }
@@ -393,8 +417,32 @@
     if (e.key === 'Escape') { e.stopPropagation(); closeReview(); }
   });
 
+  // chapter to chapter: swap only the header and the list, keep the screen, chips and dock (no reload feel)
+  var shownLang = null;
+  function swapSection(i) {
+    var cur = app.querySelector('.screen[data-sec]');
+    if (!cur || shownLang !== lang) return false;
+    if (+cur.getAttribute('data-sec') === i) return true;   // already showing it (hashchange + popstate both fire)
+    var tpl = document.createElement('template');
+    tpl.innerHTML = section(i);
+    var nx = tpl.content.firstElementChild;
+    cur.setAttribute('data-sec', i);
+    cur.querySelector('.bar').replaceWith(nx.querySelector('.bar'));
+    var sc = nx.querySelector('.scroll');
+    [].forEach.call(sc.querySelectorAll('.in'), function (el) { el.classList.remove('in'); el.style.animationDelay = ''; });
+    sc.classList.add('swap');
+    cur.querySelector('.scroll').replaceWith(sc);
+    var chips = cur.querySelector('#chips');
+    [].forEach.call(chips.querySelectorAll('[data-go]'), function (c, j) { c.setAttribute('aria-current', String(j === i)); });
+    var on = chips.querySelector('[aria-current="true"]');
+    if (on) chips.scrollTo({ left: Math.max(0, on.offsetLeft - chips.clientWidth / 2 + on.offsetWidth / 2), behavior: 'smooth' });
+    document.title = st(SECTIONS[i]) + ' — Sequoia Café';
+    return true;
+  }
   function render() {
     var h = location.hash, m = /^#s-(\d+)$/.exec(h), html;
+    if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length && swapSection(+m[1] - 1)) return;
+    shownLang = lang;
     if (h === '#tracks') html = tracks();
     else if (h === '#thanks') html = thanks();
     else if (m && +m[1] >= 1 && +m[1] <= SECTIONS.length) html = section(+m[1] - 1);
@@ -418,7 +466,8 @@
   }
 
   app.addEventListener('click', function (e) {
-    if (e.target.closest('[data-call]')) { openSheet(); return; }
+    if (e.target.closest('[data-ready]')) { readyNow(); return; }
+    if (e.target.closest('[data-call]')) { dockErr = ''; openSheet(); return; }
     if (e.target.closest('[data-acct]')) { openAccount(); return; }
     if (e.target.closest('[data-lang]')) { lang = lang === 'ar' ? 'en' : 'ar'; try { localStorage.setItem('sq-lang', lang); } catch (_) {} render(); return; }
     var b = e.target.closest('[data-go]');
@@ -437,6 +486,18 @@
     });
     acctLoading.then(function () { SequoiaAccount.open(app, { table: table }); }, function () {});
   }
+  // song request (cover page card): sent to the captain screen as a request; without a table QR, WhatsApp instead
+  if (window.SequoiaLanding) SequoiaLanding.onSong = function (title) {
+    var wa = ((window.SEQUOIA_CONFIG || {}).WHATSAPP_URL || '');
+    if (!table) {
+      if (wa) window.open(wa + '?text=' + encodeURIComponent((lang === 'ar' ? 'عايز أطلب أغنية: ' : 'Song request: ') + title), '_blank', 'noopener');
+      return Promise.resolve('wa');
+    }
+    if (!window.SequoiaOrders) return Promise.reject(new Error('offline'));
+    var at = Date.now();
+    return SequoiaOrders.publish({ type: 'req', table: table, item: ('song:' + title).slice(0, 80), rid: at.toString(36) + Math.random().toString(36).slice(2, 6) })
+      .then(function () { return 'sent'; });
+  };
   window.addEventListener('hashchange', render);
   window.addEventListener('popstate', render);
   render();
