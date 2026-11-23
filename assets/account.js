@@ -100,7 +100,7 @@
     sheet.innerHTML = '<div class="scrim" data-close></div>' +
       '<div class="panel lc" dir="rtl" lang="ar" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
       '<div class="grab" aria-hidden="true"></div>' +
-      '<button class="press x" data-close aria-label="إغلاق">' + ICON_X + '</button>' + body() + '</div>';
+      '<button class="press x" data-close aria-label="قفل">' + ICON_X + '</button>' + body() + '</div>';
     var inp = sheet.querySelector('#lc-in'); if (inp) inp.focus();
     if (state.view === 'code' && state.resendAt > Date.now()) tick = setInterval(function () {
       var w = sheet.querySelector('#lc-wait'), left = Math.ceil((state.resendAt - Date.now()) / 1000);

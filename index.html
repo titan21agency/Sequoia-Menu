@@ -99,12 +99,12 @@ img{display:block}
 .item .nm{font-weight:500;font-size:17px;line-height:1.25}
 .item .dots{flex:1 1 auto;min-width:16px;border-bottom:2px dotted rgba(31,42,68,.3);transform:translateY(-4px)}
 .item .pr{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:19px;font-variant-numeric:tabular-nums}
-.egp{margin:14px 0 4px;text-align:center;font-size:11px;letter-spacing:.24em;color:var(--ink-3)}
+.egp{margin:14px 0 4px;text-align:center;font-size:12px;letter-spacing:.24em;color:var(--ink-3)}
 .nav{margin-top:14px;display:flex;gap:10px}
 .nav button{min-width:0;height:56px;border-radius:18px;display:flex;flex-direction:column;justify-content:center;padding:0 16px}
 .nav .prev{flex:1 1 0;border:1.5px solid rgba(244,238,226,.4);background:transparent;align-items:flex-start;text-align:left}
 .nav .next{flex:1.3 1 0;border:0;background:var(--cream);align-items:flex-end;text-align:right}
-.nav small{font-family:'Barlow Semi Condensed',sans-serif;font-size:11px;letter-spacing:.2em}
+.nav small{font-family:'Barlow Semi Condensed',sans-serif;font-size:12px;letter-spacing:.2em}
 .nav b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 
 /* Thanks */
@@ -222,7 +222,7 @@ img{display:block}
 .cvscroll > .cover > *{z-index:2}
 .cvscroll > .cover > .forest{z-index:0}
 .cvscroll:not(.cvsolo) > .cover::after{content:"";position:absolute;left:0;right:0;bottom:0;height:64px;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(43,50,71,0),var(--band))}
-.lmore{position:relative;margin-top:10px;display:flex;flex-direction:column;align-items:center;gap:2px;height:auto;padding:4px 16px;border:0;background:none;color:var(--beige);font-size:12px;letter-spacing:.2em}
+.lmore{position:relative;margin-top:10px;min-height:44px;display:flex;flex-direction:column;align-items:center;gap:2px;height:auto;padding:4px 16px;border:0;background:none;color:var(--beige);font-size:12px;letter-spacing:.2em}
 .lmore svg{animation:lnudge 2.4s ease-in-out infinite}
 @keyframes lnudge{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
 .below{position:relative;padding:4px 16px 0;background:linear-gradient(180deg,var(--band) 0,rgba(43,50,71,0) 260px)}
@@ -232,9 +232,9 @@ img{display:block}
 .is-ar .lsh h2{font-size:23px}
 .lsh .rule{flex:1 1 auto;height:1px;background:linear-gradient(90deg,rgba(200,164,100,.65),rgba(200,164,100,0))}
 [dir=rtl] .lsh .rule{background:linear-gradient(270deg,rgba(200,164,100,.65),rgba(200,164,100,0))}
-.lsh .lbl{font-size:11px;letter-spacing:.24em;color:var(--gold)}
+.lsh .lbl{font-size:12px;letter-spacing:.24em;color:var(--gold)}
 .journal{position:relative;padding:18px;border-radius:22px;color:var(--navy);background:radial-gradient(rgba(107,83,48,.10) 1px,transparent 1.2px) 0 0/7px 7px,var(--paper);box-shadow:inset 0 0 0 1px rgba(107,83,48,.25),0 14px 30px rgba(0,0,0,.25)}
-.journal .kicker{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:10px;letter-spacing:.22em;color:var(--tan);padding-bottom:10px;border-bottom:2px solid var(--navy)}
+.journal .kicker{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;letter-spacing:.16em;color:var(--tan);padding-bottom:10px;border-bottom:2px solid var(--navy)}
 .journal .kicker b{font-family:'Libre Bodoni',serif;font-style:italic;font-weight:500;font-size:14px;letter-spacing:0;text-transform:none;color:var(--navy)}
 .jbody{display:flex;gap:16px;margin-top:16px;align-items:flex-start}
 .jinfo{flex:1 1 auto;min-width:0;text-align:start}
@@ -315,6 +315,21 @@ img{display:block}
 .jvdots i{width:6px;height:6px;border-radius:50%;background:rgba(244,238,226,.3)}
 .jvdots i.on{background:var(--gold);width:16px;border-radius:3px}
 .rv-later{margin-top:6px;width:100%;height:46px;border:0;background:transparent;color:var(--grey);font:inherit;font-size:15px;text-decoration:underline;text-underline-offset:4px;cursor:pointer}
+/* ---- Buttons: one system (docs/glossary.md, docs/styleguide.html) ----
+   primary = filled, secondary = outline, link = underlined, option = white tile.
+   States: pressed (.press:active), focus ring, disabled, loading (.is-loading: label stays + spinner, no second tap). */
+.press:disabled,.press[aria-disabled="true"]{cursor:not-allowed}
+.press:disabled:active{transform:none}
+.press:disabled:not(.is-loading):not(.done){opacity:.55}
+.press.is-loading{opacity:1;cursor:progress}
+.press.is-loading::after{content:"";flex:0 0 auto;width:16px;height:16px;margin-inline-start:8px;border-radius:50%;border:2px solid currentColor;border-inline-end-color:transparent;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.press.is-loading::after{animation-duration:2.4s}}
+@media (hover:hover){.btn-primary:not(:disabled):hover,.call:not(:disabled):hover,.jread:not(:disabled):hover,.nav .next:hover{filter:brightness(1.07)}.opt:not(:disabled):hover{border-color:var(--navy)}}
+a.press:focus-visible,.fb:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+/* dock: "Ready to order" is the one primary; "Other requests" is secondary (outline); a status is a sentence, not capitals */
+.call.other{background:transparent;color:var(--cream);border:1.5px solid rgba(244,238,226,.55);box-shadow:none}
+.call.sent{text-transform:none;letter-spacing:.01em}
 </style>
 </head>
 <body>

@@ -52,7 +52,7 @@
       pick1: 'اختار تراك،', pick2: 'وإحنا نشغّل.', prices: 'كل الأسعار بالجنيه', egp: 'جنيه',
       sideA: 'الوش الأول', sideB: 'الوش التاني', track: 'تراك', rewind: '› رجوع', next: 'التراك اللي بعده ‹', trackList: 'قايمة التراكات', finish: 'النهاية',
       endB: 'خلص الوش التاني', thanks: 'نورتنا', again: 'شغّله تاني', toggle: 'EN', toggleLabel: 'English',
-      backCover: 'رجوع للبداية', sections: 'أقسام المنيو', close: 'إغلاق'
+      backCover: 'رجوع للبداية', sections: 'أقسام المنيو', close: 'قفل'
     }
   };
   var lang = 'en';
@@ -141,7 +141,7 @@
       '<div class="foot">' +
         '<div style="position:absolute;inset-inline-start:20px;bottom:24px;display:flex;flex-direction:column;gap:4px">' +
           '<span class="serif-i" style="font-size:18px">' + T('pick1') + '</span><span class="serif-i" style="font-size:18px">' + T('pick2') + '</span>' +
-          '<span class="caps" style="font-size:11px;letter-spacing:.2em;color:var(--beige);margin-top:4px">' + T('prices') + '</span></div>' +
+          '<span class="caps" style="font-size:12px;letter-spacing:.2em;color:var(--beige);margin-top:4px">' + T('prices') + '</span></div>' +
         '<img class="bob" src="assets/mascot-cassette-v3.webp" width="750" height="557" alt="" style="position:absolute;inset-inline-end:10px;bottom:6px;width:150px;height:auto">' +
       '</div>' + dock() + '</section>';
   }
@@ -206,7 +206,7 @@
           billTitle: 'Your bill is coming', paying: function (p, t) { return 'Paying by ' + p + ' · table ' + t + '.'; },
           upTitle: 'Coming right up', forTable: function (x, t) { return x + ' for table ' + t + '.'; },
           fbTitle: 'How was your visit?', fbLine: 'Tell us in 2 minutes — it goes straight to the owner.',
-          more: 'Anything else?', back: 'Back to menu', needTable: 'Please enter your table number.',
+          more: 'Ask for something else', back: 'Back to menu', needTable: 'Please enter your table number.',
           fail: 'Couldn\'t reach the captain. Check your connection and try again.' },
     ar: { ready: 'جاهزين نطلب', other: 'طلبات تانية', service: 'في خدمتك', help: 'نقدر نساعدك إزاي؟', table: 'الترابيزة', bill: 'اطلب الحساب', quick: 'طلبات سريعة',
           captainComing: 'الكابتن جاي', billComing: 'الحساب جاي', isComing: ' جاية', tableW: 'ترابيزة',
@@ -214,7 +214,7 @@
           billTitle: 'الحساب جاي', paying: function (p, t) { return 'الدفع ' + p + ' · ترابيزة ' + t + '.'; },
           upTitle: 'جاي حالًا', forTable: function (x, t) { return x + ' لترابيزة ' + t + '.'; },
           fbTitle: 'إيه رأيك في زيارتك؟', fbLine: 'قولنا في دقيقتين، ورأيك هيوصل للأونر على طول.',
-          more: 'محتاج حاجة تانية؟', back: 'رجوع للمنيو', needTable: 'اكتب رقم ترابيزتك.',
+          more: 'اطلب حاجة تانية', back: 'رجوع للمنيو', needTable: 'اكتب رقم ترابيزتك.',
           fail: 'مقدرناش نوصل للكابتن. اتأكد من النت وجرّب تاني.' }
   };
   function V(k) { return SV[lang][k]; }
@@ -268,7 +268,7 @@
   function readyNow() {
     if (!table || fresh('call')) return;
     var b = app.querySelector('[data-ready]');
-    if (b) b.disabled = true;
+    if (b) busy(b);
     dockErr = '';
     send('call');
   }
@@ -345,13 +345,16 @@
     clearTimeout(dockTimer);
     dockTimer = setTimeout(function () { if (sheet.hidden) repaintDock(); }, COOLDOWN + 500);
   }
-  function send(kind, detail) {
+  // loading state: the label stays, a spinner shows, a second tap does nothing
+  function busy(b) { b.disabled = true; b.classList.add('is-loading'); b.setAttribute('aria-busy', 'true'); }
+  function send(kind, detail, btn) {
     var key = kind === 'req' ? 'req:' + detail : kind;
     if (fresh(key)) return;
     var v = table;
     if (!v) return;
     var direct = sheet.hidden;   // "Ready to order" from the dock: no sheet, the dock shows the result
     sheet.querySelectorAll('[data-send]').forEach(function (b) { b.disabled = true; });
+    if (btn) busy(btn);
     var at = Date.now(), msg = { type: kind, table: v, rid: at.toString(36) + Math.random().toString(36).slice(2, 6) };
     if (kind === 'bill') msg.pay = detail;
     if (kind === 'req') msg.item = detail;
@@ -374,7 +377,7 @@
     var b;
     if (e.target.closest('[data-close]')) closeSheet();
     else if (e.target.closest('[data-back]')) { view = null; paintSheet(); }
-    else if ((b = e.target.closest('[data-send]'))) send(b.getAttribute('data-send'), b.getAttribute('data-detail'));
+    else if ((b = e.target.closest('[data-send]'))) send(b.getAttribute('data-send'), b.getAttribute('data-detail'), b);
   });
   sheet.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') closeSheet();

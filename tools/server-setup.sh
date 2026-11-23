@@ -72,7 +72,7 @@ sequoia.menu.${DOMAIN} {
 	}
 	handle {
 		root * /srv/sites/sequoia
-		@hidden path /.git* /tools/* /apps/* /*.zip /.claude/*
+		@hidden path /.git* /tools/* /apps/* /docs/* /*.zip /.claude/*
 		respond @hidden 404
 		file_server
 		encode zstd gzip

@@ -294,13 +294,13 @@
         msg.className = 'sgmsg';
         if (!v) { msg.textContent = t.gEmpty; msg.classList.add('err'); inp.focus(); return; }
         if (!window.SequoiaLanding.onSong) return;
-        btn.disabled = true;
+        btn.disabled = true; btn.classList.add('is-loading'); btn.setAttribute('aria-busy', 'true');
         window.SequoiaLanding.onSong(v).then(function (how) {
           msg.textContent = how === 'wa' ? t.gWa : t.gSent;
           if (how !== 'wa') inp.value = '';
         }, function () {
           msg.textContent = t.gFail; msg.classList.add('err');
-        }).then(function () { btn.disabled = false; });
+        }).then(function () { btn.disabled = false; btn.classList.remove('is-loading'); btn.removeAttribute('aria-busy'); });
       });
       // QR on the tables can point at <menu>/#kont-hena to open "كنت هنا" directly
       if (location.hash === '#kont-hena') openMemory();
