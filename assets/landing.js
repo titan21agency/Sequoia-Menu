@@ -12,18 +12,18 @@
 
   var TXT = {
     ar: { more: 'كمان من سيكويا',
-          jH: 'جريدة سيكويا', jNew: 'العدد الجديد', jSoon: 'قريبًا', jSoonTitle: 'العدد الأول في الطريق', jRead: 'اقرا الجريدة', jMem: 'كنت هنا · سجّل ذكرى', jMemSub: 'احكي زيارتك في كارت، ضيف صورتك، وخدها ستوري على إنستجرام.',
+          jH: 'جريدة سيكويا', jNew: 'العدد الجديد', jSoon: 'قريبًا', jSoonTitle: 'العدد الأول في الطريق', jRead: 'اقرا الجريدة', jMem: 'سجّل ذكرى', mH: 'كنت هنا', mTitle: 'ذكرى من على النيل', jMemSub: 'احكي زيارتك في كارت، ضيف صورتك، وخدها ستوري على إنستجرام.',
           pages: function (n) { return n + ' صفحة'; },
-          cH: 'نوادي سيكويا', cSoon: 'قريبًا', cSub: 'قريبًا… مساحة لناس بتحب نفس الحاجات تتقابل عندنا.',
-          cIntro: 'نوادي بتتقابل عندنا. اختار اللي يشبهك.',
+          cH: 'فعاليات سيكويا', cSoon: '', cSub: '',
+          cIntro: 'مواعيد الموسم على شط النيل.. السما بتعمل العرض.',
           sH: 'متنسوش تتابعونا', foot: 'سيكويا كافيه · المنصورة · من 2026',
           page: function (a, b) { return 'صفحة ' + a + ' من ' + b; }, hint: 'اسحب يمين وشمال · وسّع بصباعين للتكبير',
           close: 'قفل', prev: 'الصفحة اللي قبلها', next: 'الصفحة اللي بعدها' },
     en: { more: 'More from Sequoia',
-          jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal', jMem: 'I was here · save a memory', jMemSub: 'Write your visit on a card, add your photo, and get it as an Instagram story.',
+          jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal', jMem: 'Save a memory', mH: 'I was here', mTitle: 'A memory by the Nile', jMemSub: 'Write your visit on a card, add your photo, and get it as an Instagram story.',
           pages: function (n) { return n + ' pages'; },
-          cH: 'Sequoia Clubs', cSoon: 'Soon', cSub: 'Coming soon… a place for people who love the same things to meet at Sequoia.',
-          cIntro: 'Clubs that meet at Sequoia. Pick the one that fits you.',
+          cH: 'Sequoia Events', cSoon: '', cSub: '',
+          cIntro: 'This season by the Nile. The sky puts on the show.',
           sH: 'Follow along', foot: 'Sequoia Café · Mansoura · Est. 2026',
           page: function (a, b) { return 'Page ' + a + ' of ' + b; }, hint: 'Swipe to turn pages · pinch to zoom',
           close: 'Close', prev: 'Previous page', next: 'Next page' }
@@ -73,16 +73,23 @@
         (has && cover ? '<div class="jpaper img" aria-hidden="true"><span class="tape"></span><img src="' + esc(cover) + '" alt="" loading="lazy" decoding="async"></div>' : miniPaper()) +
         '</div>' +
         (has ? '<button class="press jread" type="button" data-journal>' + BOOK + '<span>' + t.jRead + '</span></button>' : '') +
-        '<button class="press jread" type="button" data-memory style="background:transparent;color:var(--navy);border:1.5px solid var(--navy)">' + PEN + '<span>' + t.jMem + '</span></button>' +
-        '<p style="margin:8px 2px 0;font-size:13px;opacity:.8">' + t.jMemSub + '</p>' +
+      '</div></section>';
+  }
+
+  // "كنت هنا": its own section under the journal
+  function memory(lang, t) {
+    return '<section class="lsec" aria-labelledby="l-memory">' + head('l-memory', t.mH, 'Memories') +
+      '<div class="journal reveal">' +
+        '<div class="jbody"><div class="jinfo"><h3>' + t.mTitle + '</h3><p>' + t.jMemSub + '</p></div></div>' +
+        '<button class="press jread" type="button" data-memory>' + PEN + '<span>' + t.jMem + '</span></button>' +
       '</div></section>';
   }
 
   function clubs(lang, t) {
     var cards = CLUBS.filter(function (c) { return c && c.name; });
-    return '<section class="lsec" aria-labelledby="l-clubs">' + head('l-clubs', t.cH, 'Clubs') +
+    return '<section class="lsec" aria-labelledby="l-clubs">' + head('l-clubs', t.cH, 'Events') +
       '<div class="clubs reveal">' +
-        (cards.length ? '' : '<span class="cbadge">' + t.cSoon + '</span>') +
+        
         '<div class="cicons" aria-hidden="true">' + CLUB_ICONS.map(function (s) { return '<span>' + s + '</span>'; }).join('') + '</div>' +
         '<p>' + (cards.length ? t.cIntro : t.cSub) + '</p>' +
         (cards.length ? '<div class="ccards noscroll">' + cards.map(function (c) {
@@ -205,7 +212,7 @@
     },
     html: function (lang) {
       var t = TXT[lang === 'ar' ? 'ar' : 'en'];
-      return '<div class="below" id="below">' + journal(lang, t) + clubs(lang, t) + social(lang, t) + '</div>';
+      return '<div class="below" id="below">' + journal(lang, t) + memory(lang, t) + clubs(lang, t) + social(lang, t) + '</div>';
     },
     // scroller: the cover's scrolling element (re-created on every render)
     mount: function (scroller, lang) {
