@@ -380,7 +380,9 @@ function createApp(opts = {}) {
       if (!tn || !['took', 'undo'].includes(b.type)) return send(res, 400, { error: 'bad' });
       const msg = { type: b.type, table: String(tn), by: staff.name };
       if (b.type === 'took') msg.rids = (Array.isArray(b.rids) ? b.rids : []).filter(x => typeof x === 'string' && x.length <= 24).slice(0, 50);
-      if (b.type === 'undo') msg.calls = (Array.isArray(b.calls) ? b.calls : []).slice(0, 50);
+      if (b.type === 'undo') msg.calls = (Array.isArray(b.calls) ? b.calls : []).slice(0, 50)
+        .filter(c => c && typeof c.rid === 'string' && c.rid.length <= 24)
+        .map(c => ({ rid: c.rid, time: Number.isFinite(+c.time) ? +c.time : t, kind: ['call', 'bill', 'req'].includes(c.kind) ? c.kind : 'call', detail: String(c.detail ?? '').slice(0, 80) }));
       if (JSON.stringify(msg).length > 8000) return send(res, 400, { error: 'bad' });
       return send(res, 200, { ok: true, id: addCall(msg, t) });
     }
@@ -463,6 +465,9 @@ function createApp(opts = {}) {
     const pw = password || crypto.randomBytes(6).toString('base64url');
     Q(`INSERT INTO staff(username,name,pass,role) VALUES(?,?,?,?) ON CONFLICT(username) DO UPDATE SET pass=excluded.pass, role=excluded.role, name=excluded.name, active=1`)
       .run(username.toLowerCase(), name || username, hashPass(pw), role);
+    // a new password signs the user out everywhere
+    const u = Q('SELECT id FROM staff WHERE username=?').get(username.toLowerCase());
+    Q("DELETE FROM sessions WHERE kind='staff' AND subject_id=?").run(u.id);
     return pw;
   }
   return { server, db, setStaff, tableSig };

@@ -80,7 +80,11 @@ function startApp() {
       log = log.filter(function (l) { return ids.indexOf(l.rid) < 0; });
       unqueue(ids);
       var l = pending[t] || (pending[t] = []);
-      back.forEach(function (b) { if (!l.some(function (c) { return c.rid === b.rid; })) l.push({ rid: b.rid, time: b.time, kind: b.kind || 'call', detail: b.detail || '' }); });
+      // only known kinds reach the HTML (kind is used in a class name)
+      back.forEach(function (b) {
+        if (!b || typeof b.rid !== 'string' || l.some(function (c) { return c.rid === b.rid; })) return;
+        l.push({ rid: b.rid, time: +b.time || meta.time, kind: KINDS[b.kind] ? b.kind : 'call', detail: String(b.detail || '').slice(0, 80) });
+      });
       if (!l.length) delete pending[t];
       return false;
     }
