@@ -30,7 +30,18 @@ DROP INDEX IF EXISTS stamps_customer;
 CREATE INDEX IF NOT EXISTS stamps_created ON stamps(created_at);
 CREATE INDEX IF NOT EXISTS rewards_customer ON rewards(customer_id);
 CREATE INDEX IF NOT EXISTS audit_customer ON audit_log(customer_id, id);
+-- "كنت هنا": a customer's memory card from a visit + their picks for the next journal issue.
+-- photo is a file name in the photo folder, kept only when the customer agreed (consent=1).
+CREATE TABLE IF NOT EXISTS memories(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), created_at INTEGER NOT NULL,
+  visit_date TEXT, with_whom TEXT, drink TEXT, song TEXT, sky TEXT, quote TEXT,
+  rec_book TEXT, rec_film TEXT, rec_song TEXT, story TEXT, consent INTEGER NOT NULL DEFAULT 0, photo TEXT);
+CREATE INDEX IF NOT EXISTS memories_customer ON memories(customer_id, id);
+CREATE INDEX IF NOT EXISTS memories_created ON memories(created_at);
 `;
+// memory card: allowed sky colours (the page shows the swatches) and text limits
+const SKY = ['honey', 'gold', 'sunset', 'rose', 'blue', 'night', 'cloud'];
+const MEM_FIELDS = { visit_date: 40, with_whom: 80, drink: 80, song: 100, quote: 240, rec_book: 120, rec_film: 120, rec_song: 120, story: 1200 };
+const MEM_PHOTO_MAX = 1.5e6; // bytes of JPEG after the browser resizes it (about 1080 px wide)
 
 function hashPass(p) { const salt = crypto.randomBytes(16); return salt.toString('hex') + ':' + crypto.scryptSync(p, salt, 64).toString('hex'); }
 function checkPass(p, stored) { const [s, h] = String(stored).split(':'); const c = crypto.scryptSync(String(p), Buffer.from(s, 'hex'), 64); return crypto.timingSafeEqual(c, Buffer.from(h, 'hex')); }
@@ -67,6 +78,8 @@ function createApp(opts = {}) {
   let sendOtp = opts.sendOtp || OTP.fromEnv();
   const SECRET = opts.secret || process.env.LOYALTY_SECRET || crypto.randomBytes(32).toString('hex');
   const STATIC_ROOT = opts.staticRoot || null; // dev/test only; in production Caddy serves the menu
+  const PHOTO_DIR = opts.photoDir || null;     // memory photos; null = photos are never stored
+  if (PHOTO_DIR) fs.mkdirSync(PHOTO_DIR, { recursive: true });
   const secure = opts.secureCookies !== false;
   const limited = limiter();
   const H = 3600e3;
@@ -109,8 +122,8 @@ function createApp(opts = {}) {
       req.on('error', bad);
     });
   }
-  async function readBody(req) {
-    const d = await readRaw(req, 1e4);
+  async function readBody(req, max = 1e4) {
+    const d = await readRaw(req, max);
     try { const j = d ? JSON.parse(d) : {}; return j && typeof j === 'object' ? j : {}; } catch { throw new Error('bad json'); }
   }
   const cookies = req => Object.fromEntries((req.headers.cookie || '').split(';').map(c => c.trim().split('=')).filter(x => x[0]));
@@ -146,6 +159,34 @@ function createApp(opts = {}) {
       WHERE a.customer_id=? AND a.action IN('stamp','redeem') AND a.id<? ORDER BY a.id DESC LIMIT ?`).all(customerId, before || 2 ** 53, limit + 1);
     return { items: rows.slice(0, limit).map(r => ({ id: r.id, at: r.at, action: r.action, staff: r.staff, table: (JSON.parse(r.detail || '{}')).table ?? null })), more: rows.length > limit };
   }
+  // ---------- memories ----------
+  const clean = (v, n) => String(v ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, n);
+  function memIn(b) {
+    const m = {};
+    for (const [k, n] of Object.entries(MEM_FIELDS)) m[k] = k === 'story' ? String(b[k] ?? '').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').trim().slice(0, n) : clean(b[k], n);
+    m.sky = SKY.includes(b.sky) ? b.sky : '';
+    m.consent = b.consent === true;
+    return m;
+  }
+  function memOut(r) {
+    const o = { id: r.id, at: r.created_at, sky: r.sky || '', consent: !!r.consent, photo: !!r.photo };
+    for (const k of Object.keys(MEM_FIELDS)) o[k] = r[k] || '';
+    return o;
+  }
+  function jpeg(v) {
+    const mm = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(v));
+    if (!mm) return null;
+    const buf = Buffer.from(mm[1], 'base64');
+    if (buf.length < 100 || buf.length > MEM_PHOTO_MAX || buf[0] !== 0xff || buf[1] !== 0xd8 || buf[2] !== 0xff) return null;
+    return buf;
+  }
+  function sendPhoto(res, row) {
+    const f = row && row.photo && PHOTO_DIR && path.join(PHOTO_DIR, path.basename(row.photo));
+    if (!f || !fs.existsSync(f)) return send(res, 404, { error: 'not found' });
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', ...SEC_HEADERS });
+    fs.createReadStream(f).pipe(res);
+  }
+
   function loginCustomer(phone, t, ctx, via) {
     Q('INSERT INTO customers(phone,created_at,last_visit_at) VALUES(?,?,?) ON CONFLICT(phone) DO UPDATE SET last_visit_at=excluded.last_visit_at').run(phone, t, t);
     const c = Q('SELECT * FROM customers WHERE phone=?').get(phone);
@@ -328,6 +369,42 @@ function createApp(opts = {}) {
         return send(res, 200, { phone: c.phone, card: card(c) });
       }
       if (p === '/me/stream' && M === 'GET') return stream(req, res, 'c:' + c.id);
+      // ----- كنت هنا: memory cards -----
+      if (p === '/me/memories' && M === 'GET') {
+        const rows = Q('SELECT * FROM memories WHERE customer_id=? ORDER BY id DESC LIMIT 50').all(c.id);
+        return send(res, 200, { items: rows.map(memOut) });
+      }
+      if (p === '/me/memories' && M === 'POST') {
+        if (limited('mem:' + c.id, 20, 24 * H, t)) return send(res, 429, { error: 'rate' });
+        let b; try { b = await readBody(req, MEM_PHOTO_MAX * 1.4 + 2e4); } catch { return send(res, 413, { error: 'size' }); }
+        const m = memIn(b);
+        if (!m.with_whom && !m.drink && !m.song && !m.quote && !m.sky && !m.rec_book && !m.rec_film && !m.rec_song && !m.story) return send(res, 400, { error: 'empty' });
+        let photo = null;
+        if (b.photo != null && b.photo !== '') {
+          if (!m.consent) return send(res, 400, { error: 'consent' });
+          const buf = jpeg(b.photo);
+          if (!buf) return send(res, 400, { error: 'photo' });
+          if (PHOTO_DIR) { photo = crypto.randomBytes(12).toString('hex') + '.jpg'; fs.writeFileSync(path.join(PHOTO_DIR, photo), buf, { mode: 0o600 }); }
+        }
+        const r = Q(`INSERT INTO memories(customer_id,created_at,visit_date,with_whom,drink,song,sky,quote,rec_book,rec_film,rec_song,story,consent,photo)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(c.id, t, m.visit_date, m.with_whom, m.drink, m.song, m.sky, m.quote, m.rec_book, m.rec_film, m.rec_song, m.story, m.consent ? 1 : 0, photo);
+        audit('customer', c.id, 'memory', c.id, { id: Number(r.lastInsertRowid), photo: !!photo }, ctx);
+        return send(res, 200, { ok: true, item: memOut(Q('SELECT * FROM memories WHERE id=?').get(r.lastInsertRowid)) });
+      }
+      let mp = /^\/me\/memories\/(\d+)\/photo$/.exec(p);
+      if (mp && M === 'GET') {
+        const row = Q('SELECT photo FROM memories WHERE id=? AND customer_id=?').get(+mp[1], c.id);
+        return sendPhoto(res, row);
+      }
+      mp = /^\/me\/memories\/(\d+)$/.exec(p);
+      if (mp && M === 'DELETE') {
+        const row = Q('SELECT photo FROM memories WHERE id=? AND customer_id=?').get(+mp[1], c.id);
+        if (!row) return send(res, 404, { error: 'not found' });
+        if (row.photo && PHOTO_DIR) fs.rmSync(path.join(PHOTO_DIR, row.photo), { force: true });
+        Q('DELETE FROM memories WHERE id=?').run(+mp[1]);
+        audit('customer', c.id, 'memory_delete', c.id, { id: +mp[1] }, ctx);
+        return send(res, 200, { ok: true });
+      }
       if (p === '/me/logout' && M === 'POST') {
         Q('DELETE FROM sessions WHERE token_hash=?').run(sha(cookies(req).sq_card));
         Q('DELETE FROM presence WHERE customer_id=?').run(c.id);
@@ -398,6 +475,19 @@ function createApp(opts = {}) {
       const rows = Q('SELECT c.id, c.phone FROM presence p JOIN customers c ON c.id=p.customer_id WHERE p.table_number=? AND p.at>? ORDER BY p.at DESC').all(tn, t - 3 * H);
       audit('staff', staff.id, 'review_contacts', null, { table: tn, count: rows.length }, ctx);
       return send(res, 200, rows.map(r => ({ id: r.id, phone: R.maskPhone(r.phone), wa: '20' + r.phone.replace(/^0/, '') })));
+    }
+    // owner: memories + next-issue picks (admin only; phones are shown in full so a winner can be contacted)
+    if (p === '/staff/memories' && M === 'GET') {
+      if (staff.role !== 'admin') return send(res, 403, { error: 'forbidden' });
+      const since = +url.searchParams.get('since') || 0;
+      const rows = Q('SELECT m.*, c.phone FROM memories m JOIN customers c ON c.id=m.customer_id WHERE m.created_at>=? ORDER BY m.id DESC LIMIT 2000').all(since);
+      audit('staff', staff.id, 'memories_export', null, { count: rows.length }, ctx);
+      return send(res, 200, { items: rows.map(r => ({ ...memOut(r), phone: r.phone })) });
+    }
+    const smp = /^\/staff\/memories\/(\d+)\/photo$/.exec(p);
+    if (smp && M === 'GET') {
+      if (staff.role !== 'admin') return send(res, 403, { error: 'forbidden' });
+      return sendPhoto(res, Q('SELECT photo FROM memories WHERE id=?').get(+smp[1]));
     }
     if (p === '/staff/customer' && M === 'GET') {
       const id = +url.searchParams.get('id'); const phone = R.normalizePhone(url.searchParams.get('phone'));
@@ -482,8 +572,18 @@ if (require.main === module) {
     settingsFile: SETTINGS,
     dbFile: path.join(DATA_DIR, 'loyalty.db'),
     staticRoot: process.env.STATIC_ROOT ? path.resolve(process.env.STATIC_ROOT) : null,
+    photoDir: path.join(DATA_DIR, 'memory-photos'),
     secureCookies: !dev,
   });
+  if (process.argv[2] === 'memories-export') {
+    // CSV for planning the next journal issue: node server.js memories-export > memories.csv
+    const cols = ['id', 'created', 'phone', 'visit_date', 'with_whom', 'drink', 'song', 'sky', 'quote', 'rec_book', 'rec_film', 'rec_song', 'story', 'consent', 'photo'];
+    const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const rows = app.db.prepare('SELECT m.*, c.phone FROM memories m JOIN customers c ON c.id=m.customer_id ORDER BY m.id').all();
+    process.stdout.write('﻿' + cols.join(',') + '\n');
+    for (const r of rows) process.stdout.write([r.id, new Date(r.created_at).toISOString(), r.phone, r.visit_date, r.with_whom, r.drink, r.song, r.sky, r.quote, r.rec_book, r.rec_film, r.rec_song, r.story, r.consent, r.photo].map(q).join(',') + '\n');
+    process.exit(0);
+  }
   if (process.argv[2] === 'set-staff') {
     const [, , , username, role = 'captain', name, pw] = process.argv;
     if (!username) { console.log('usage: node server.js set-staff <username> <captain|admin> "<name>" [password]'); process.exit(1); }

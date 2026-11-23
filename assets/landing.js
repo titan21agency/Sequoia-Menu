@@ -12,18 +12,18 @@
 
   var TXT = {
     ar: { more: 'كمان من سيكويا',
-          jH: 'جريدة سيكويا', jNew: 'العدد الجديد', jSoon: 'قريبًا', jSoonTitle: 'العدد الأول في الطريق', jRead: 'اقرا الجريدة',
+          jH: 'جريدة سيكويا', jNew: 'العدد الجديد', jSoon: 'قريبًا', jSoonTitle: 'العدد الأول في الطريق', jRead: 'اقرا الجريدة', jMem: 'سجّل ذكرى', mH: 'كنت هنا', mTitle: 'ذكرى من على النيل', jMemSub: 'احكي زيارتك في كارت، ضيف صورتك، وخدها ستوري على إنستجرام.',
           pages: function (n) { return n + ' صفحة'; },
-          cH: 'نوادي سيكويا', cSoon: 'قريبًا', cSub: 'قريبًا… مساحة لناس بتحب نفس الحاجات تتقابل عندنا.',
-          cIntro: 'نوادي بتتقابل عندنا. اختار اللي يشبهك.',
+          cH: 'فعاليات سيكويا', cSoon: '', cSub: '',
+          cIntro: 'مواعيد الموسم على شط النيل.. السما بتعمل العرض.',
           sH: 'متنسوش تتابعونا', foot: 'سيكويا كافيه · المنصورة · من 2026',
           page: function (a, b) { return 'صفحة ' + a + ' من ' + b; }, hint: 'اسحب يمين وشمال · وسّع بصباعين للتكبير',
           close: 'قفل', prev: 'الصفحة اللي قبلها', next: 'الصفحة اللي بعدها' },
     en: { more: 'More from Sequoia',
-          jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal',
+          jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal', jMem: 'Save a memory', mH: 'I was here', mTitle: 'A memory by the Nile', jMemSub: 'Write your visit on a card, add your photo, and get it as an Instagram story.',
           pages: function (n) { return n + ' pages'; },
-          cH: 'Sequoia Clubs', cSoon: 'Soon', cSub: 'Coming soon… a place for people who love the same things to meet at Sequoia.',
-          cIntro: 'Clubs that meet at Sequoia. Pick the one that fits you.',
+          cH: 'Sequoia Events', cSoon: '', cSub: '',
+          cIntro: 'This season by the Nile. The sky puts on the show.',
           sH: 'Follow along', foot: 'Sequoia Café · Mansoura · Est. 2026',
           page: function (a, b) { return 'Page ' + a + ' of ' + b; }, hint: 'Swipe to turn pages · pinch to zoom',
           close: 'Close', prev: 'Previous page', next: 'Next page' }
@@ -34,6 +34,7 @@
   function safeUrl(u) { return /^https:\/\//.test(u || '') ? u : ''; }
 
   var BOOK = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h6a2 2 0 0 1 2 2V19a2 2 0 0 0-2-2H4zM20 5.5h-6a2 2 0 0 0-2 2V19a2 2 0 0 1 2-2h6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
+  var PEN = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>';
   var DOWN = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   var CLUB_ICONS = [
     '<svg width="20" height="20" viewBox="0 0 24 24"><path d="M4 5.5h6a2 2 0 0 1 2 2V19a2 2 0 0 0-2-2H4zM20 5.5h-6a2 2 0 0 0-2 2V19a2 2 0 0 1 2-2h6z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>',
@@ -75,11 +76,20 @@
       '</div></section>';
   }
 
+  // "كنت هنا": its own section under the journal
+  function memory(lang, t) {
+    return '<section class="lsec" aria-labelledby="l-memory">' + head('l-memory', t.mH, 'Memories') +
+      '<div class="journal reveal">' +
+        '<div class="jbody"><div class="jinfo"><h3>' + t.mTitle + '</h3><p>' + t.jMemSub + '</p></div></div>' +
+        '<button class="press jread" type="button" data-memory>' + PEN + '<span>' + t.jMem + '</span></button>' +
+      '</div></section>';
+  }
+
   function clubs(lang, t) {
     var cards = CLUBS.filter(function (c) { return c && c.name; });
-    return '<section class="lsec" aria-labelledby="l-clubs">' + head('l-clubs', t.cH, 'Clubs') +
+    return '<section class="lsec" aria-labelledby="l-clubs">' + head('l-clubs', t.cH, 'Events') +
       '<div class="clubs reveal">' +
-        (cards.length ? '' : '<span class="cbadge">' + t.cSoon + '</span>') +
+        
         '<div class="cicons" aria-hidden="true">' + CLUB_ICONS.map(function (s) { return '<span>' + s + '</span>'; }).join('') + '</div>' +
         '<p>' + (cards.length ? t.cIntro : t.cSub) + '</p>' +
         (cards.length ? '<div class="ccards noscroll">' + cards.map(function (c) {
@@ -183,6 +193,18 @@
     if (backTo && document.contains(backTo)) backTo.focus();
   }
 
+  // "كنت هنا" (assets/memory.js) is fetched only the first time it is opened
+  var memLoading = null;
+  function openMemory() {
+    var app = document.body; // outside #app: the menu re-renders #app on every route change
+    if (window.SequoiaMemory) return SequoiaMemory.open(app);
+    if (!memLoading) memLoading = new Promise(function (ok, bad) {
+      var sc = document.createElement('script'); sc.src = 'assets/memory.js'; sc.onload = ok; sc.onerror = function () { memLoading = null; bad(); };
+      document.head.appendChild(sc);
+    });
+    memLoading.then(function () { SequoiaMemory.open(app); }, function () {});
+  }
+
   window.SequoiaLanding = {
     // the "more below" link that sits under the cover's play button
     more: function (lang) {
@@ -190,7 +212,7 @@
     },
     html: function (lang) {
       var t = TXT[lang === 'ar' ? 'ar' : 'en'];
-      return '<div class="below" id="below">' + journal(lang, t) + clubs(lang, t) + social(lang, t) + '</div>';
+      return '<div class="below" id="below">' + journal(lang, t) + memory(lang, t) + clubs(lang, t) + social(lang, t) + '</div>';
     },
     // scroller: the cover's scrolling element (re-created on every render)
     mount: function (scroller, lang) {
@@ -201,7 +223,10 @@
           var below = scroller.querySelector('#below'), reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
           if (below) scroller.scrollTo({ top: scroller.scrollTop + below.getBoundingClientRect().top - scroller.getBoundingClientRect().top, behavior: reduce ? 'auto' : 'smooth' });
         } else if ((b = e.target.closest('[data-journal]'))) openJournal(lang, b);
+        else if (e.target.closest('[data-memory]')) openMemory();
       });
+      // QR on the tables can point at <menu>/#kont-hena to open "كنت هنا" directly
+      if (location.hash === '#kont-hena') openMemory();
       // scroll-in: everything is visible at rest; only blocks below the first screen fade in when reached
       if (!('IntersectionObserver' in window)) return;
       var io = new IntersectionObserver(function (es) {
