@@ -17,7 +17,8 @@
       ['Mocha Frappé', 135, 'فرابيه موكا'], ['White Mocha Frappé', 140, 'فرابيه وايت موكا'], ['Espresso Frappé', 130, 'فرابيه إسبريسو'], ['Matcha Frappé', 140, 'فرابيه ماتشا']] }] },
     { title: 'Milkshake', ar: 'ميلك شيك', groups: [{ items: [
       ['Vanilla Milkshake', 120, 'ميلك شيك فانيليا'], ['Chocolate Milkshake', 130, 'ميلك شيك شوكولاتة'], ['Mango Milkshake', 130, 'ميلك شيك مانجو'], ['Strawberry Milkshake', 130, 'ميلك شيك فراولة'],
-      ['Caramel Milkshake', 130, 'ميلك شيك كراميل'], ['Lotus Milkshake', 130, 'ميلك شيك لوتس'], ['Blueberry Milkshake', 130, 'ميلك شيك بلوبيري']] }] },
+      ['Caramel Milkshake', 130, 'ميلك شيك كراميل'], ['Lotus Milkshake', 130, 'ميلك شيك لوتس'], ['Blueberry Milkshake', 130, 'ميلك شيك بلوبيري'],
+      ['Oreo Milkshake', 135, 'ميلك شيك أوريو']] }] },
     { title: 'Fresh Juices', ar: 'عصائر فريش', groups: [{ items: [
       ['Mango Juice', 90, 'عصير مانجو'], ['Strawberry Juice', 90, 'عصير فراولة'], ['Guava Juice', 90, 'عصير جوافة'], ['Lemon Juice', 70, 'عصير ليمون'],
       ['Lemon Mint Juice', 80, 'ليمون نعناع'], ['Banana Milk', 90, 'موز باللبن'], ['Orange Juice', 90, 'عصير برتقال']] }] },
@@ -30,7 +31,11 @@
       ['Kiwi Smoothie', 110, 'سموذي كيوي'], ['Passion Fruit Smoothie', 120, 'سموذي باشن فروت'], ['Cola Smoothie', 115, 'سموذي كولا'], ['Watermelon Smoothie', 120, 'سموذي بطيخ'],
       ['Peach Smoothie', 115, 'سموذي خوخ'], ['Mixed Piña Colada', 135, 'ميكس بينا كولادا'], ['Lemon Smoothie', 90, 'سموذي ليمون'], ['Lemon Mint Smoothie', 100, 'سموذي ليمون نعناع']] }] },
     { title: 'Desserts', ar: 'حلويات', groups: [{ items: [
-      ['Molten Cake', 130, 'مولتن كيك'], ['Red Velvet Cake', 105, 'ريد فيلفت كيك'], ['Cheesecake', 135, 'تشيز كيك'], ['Chocolate Fudge', 135, 'شوكولاتة فدج']] }] },
+      ['Molten Cake', 130, 'مولتن كيك'], ['Red Velvet Cake', 105, 'ريد فيلفت كيك'], ['Cheesecake', 135, 'تشيز كيك'], ['Chocolate Fudge', 135, 'شوكولاتة فدج'],
+      ['San Sebastian', 145, 'سان سيباستيان'], ['Brownies', 125, 'براونيز'], ['Ferrero Rocher', 140, 'فيريرو روشيه'],
+      ['Mousse · Raspberry, Blueberry, Mango, Mango Passion', 180, 'موس · راسبيري، بلوبيري، مانجو، مانجو باشن']] },
+      { label: 'Waffle & Pancake', ar: 'وافل وبان كيك', items: [
+      ['Classic Waffle', 125, 'وافل كلاسيك'], ['Classic Pancake', 105, 'بان كيك كلاسيك']] }] },
     { title: 'Extras', ar: 'إضافات', groups: [
       { label: 'Additional Drinks', ar: 'مشروبات إضافية', items: [['Small Mineral Water', 15, 'مياه معدنية صغيرة'], ['Red Bull', 100, 'ريد بول'], ['Red Bull Mojito', 170, 'موهيتو ريد بول']] },
       { label: 'Additions', ar: 'إضافات', items: [['Latte Art', 35, 'لاتيه آرت'], ['Sauce', 25, 'صوص'], ['Milk', 15, 'لبن']] }] }
