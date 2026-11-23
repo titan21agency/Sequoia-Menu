@@ -74,7 +74,8 @@ echo "*/5 * * * * root /usr/local/bin/sequoia-loyalty-update >/dev/null 2>&1" > 
 cat > /usr/local/bin/sequoia-loyalty-backup <<'BAK'
 #!/bin/sh
 # daily copy of the card database, one file per weekday (keeps 7)
-cd /var/lib/sequoia-loyalty && /usr/bin/node -e "const{DatabaseSync}=require('node:sqlite');const f='backup-'+new Date().toLocaleDateString('en',{weekday:'short'})+'.db';require('fs').rmSync(f,{force:true});new DatabaseSync('loyalty.db').exec(\"VACUUM INTO '\"+f+\"'\")"
+cd /var/lib/sequoia-loyalty && /usr/bin/node -e "const{DatabaseSync}=require('node:sqlite');const f='backup-'+new Date().toLocaleDateString('en',{weekday:'short'})+'.db';require('fs').rmSync(f,{force:true});new DatabaseSync('loyalty.db').exec(\"VACUUM INTO '\"+f+\"'\");const v=Object.values(new DatabaseSync(f,{readOnly:true}).prepare('PRAGMA integrity_check').get())[0];require('fs').writeFileSync('backup-status',new Date().toISOString()+' '+f+' '+v+'\n');if(v!=='ok')process.exit(1)" \
+  || logger -t sequoia-backup "backup FAILED, see /var/lib/sequoia-loyalty/backup-status"
 BAK
 chmod +x /usr/local/bin/sequoia-loyalty-backup
 echo "30 3 * * * sequoia /usr/local/bin/sequoia-loyalty-backup >/dev/null 2>&1" > /etc/cron.d/sequoia-loyalty-backup
@@ -94,9 +95,9 @@ sequoia.menu.titan22agency.com {
 		respond @hidden 404
 		file_server
 		encode zstd gzip
-		@img path *.webp *.png *.jpg
+		@img path *.webp *.png *.jpg *.woff2
 		header @img Cache-Control "public, max-age=604800, stale-while-revalidate=86400"
-		@other not path *.webp *.png *.jpg
+		@other not path *.webp *.png *.jpg *.woff2
 		header @other Cache-Control "no-cache"
 	}
 	header {
@@ -106,7 +107,7 @@ sequoia.menu.titan22agency.com {
 		X-Frame-Options "DENY"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
 		Cross-Origin-Opener-Policy "same-origin"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
 		-Server
 	}
 }

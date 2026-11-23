@@ -5,7 +5,7 @@ set -u
 cd "$(git rev-parse --show-toplevel)"
 
 PATTERN='(mpa_[A-Za-z0-9]{8,}|EAA[A-Za-z0-9]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|ghp_[A-Za-z0-9]{30,}|xox[abprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|ntfy\.sh/[a-z0-9-]{8,}|(api[_-]?key|access[_-]?token|secret|password|passwd|token)["'"'"' ]*[:=] *["'"'"'][A-Za-z0-9_+/=.-]{8,}["'"'"'])'
-ALLOW='(YOUR_ACCESS_TOKEN|example|placeholder|pass-1234|test-secret|dev-hook-secret|hook-secret|process\.env|env\.)'
+ALLOW='(YOUR_ACCESS_TOKEN|example|placeholder|pass-1234|test-secret|dev-hook-secret|hook-secret|mpa_abcdefghijkl|mpa_wrongtoken123|mpa_goodtoken12345|process\.env|env\.)'
 
 found=0
 hits=$(git ls-files -z | grep -zv -E '\.(png|jpe?g|webp|zip)$' | xargs -0 grep -nIE "$PATTERN" 2>/dev/null | grep -vE "$ALLOW" || true)
