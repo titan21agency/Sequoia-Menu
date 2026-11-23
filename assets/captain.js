@@ -39,6 +39,7 @@ function startApp() {
   function what(it) {
     if (it.kind === 'call') return 'عايزين يطلبوا';
     if (it.kind === 'bill') return 'الحساب · ' + (PAY[it.detail] || it.detail || '');
+    if (/^song:/.test(it.detail || '')) return '🎵 أغنية: ' + it.detail.slice(5);
     return QUICK[it.detail] || it.detail || 'طلب';
   }
   function dayStart(now) {
