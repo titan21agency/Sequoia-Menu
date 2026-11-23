@@ -17,7 +17,7 @@
           cH: 'فعاليات سيكويا', cSoon: '', cSub: '',
           cIntro: 'مواعيد الموسم على شط النيل.. السما بتعمل العرض.',
           sH: 'متنسوش تتابعونا', foot: 'سيكويا كافيه · المنصورة · من 2026',
-          page: function (a, b) { return 'صفحة ' + a + ' من ' + b; }, hint: 'اسحب يمين وشمال · وسّع بصباعين للتكبير',
+          page: function (a, b) { return 'صفحة ' + a + ' من ' + b; }, hint: 'اسحب الصفحة أو دوس على طرفها علشان تقلبها',
           close: 'قفل', prev: 'الصفحة اللي قبلها', next: 'الصفحة اللي بعدها' },
     en: { more: 'More from Sequoia',
           jH: 'Sequoia Journal', jNew: 'New issue', jSoon: 'Coming soon', jSoonTitle: 'The first issue is on its way', jRead: 'Read the journal', jMem: 'Save a memory', mH: 'I was here', mTitle: 'A memory by the Nile', jMemSub: 'Write your visit on a card, add your photo, and get it as an Instagram story.',
@@ -25,7 +25,7 @@
           cH: 'Sequoia Events', cSoon: '', cSub: '',
           cIntro: 'This season by the Nile. The sky puts on the show.',
           sH: 'Follow along', foot: 'Sequoia Café · Mansoura · Est. 2026',
-          page: function (a, b) { return 'Page ' + a + ' of ' + b; }, hint: 'Swipe to turn pages · pinch to zoom',
+          page: function (a, b) { return 'Page ' + a + ' of ' + b; }, hint: 'Swipe the page or tap its edge to turn it',
           close: 'Close', prev: 'Previous page', next: 'Next page' }
   };
 
@@ -111,8 +111,11 @@
     '</section>';
   }
 
-  // ---- journal viewer: full screen, pages right-to-left (the paper is Arabic), images load one page ahead ----
-  var V = null, cur = 0, vLang = 'ar', backTo = null;
+  // ---- journal viewer: full screen, one printed page at a time; pages turn right-to-left like the Arabic paper
+  //      (the page lifts off the spine on the right and turns over). Images load one page ahead. ----
+  var V = null, cur = 0, vLang = 'ar', backTo = null, busy = false, RATIO = 1400 / 1979;
+  var PEN_S = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>';
+  function reduced() { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); }
   function viewer() {
     if (V) return V;
     V = document.createElement('div');
@@ -122,10 +125,11 @@
     V.setAttribute('aria-modal', 'true');
     V.setAttribute('aria-labelledby', 'jv-title');
     V.innerHTML = '<div class="jvbar"><div><b id="jv-title"></b><span id="jv-count"></span></div>' +
-        '<button class="press jvx" type="button" data-jv-close><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></div>' +
-      '<div class="jvpages noscroll" dir="rtl">' + PAGES.map(function (src, i) {
-        return '<div class="jvp"><img data-src="' + esc(src) + '" alt="' + (i + 1) + '" decoding="async"></div>';
-      }).join('') + '</div>' +
+        '<span class="jvtools"><button class="press jvmem" type="button" data-jv-mem>' + PEN_S + '<span id="jv-mem"></span></button>' +
+        '<button class="press jvx" type="button" data-jv-close><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button></span></div>' +
+      '<div class="jvbook"><div class="jvstack" dir="ltr">' + PAGES.map(function (src, i) {
+        return '<div class="jvp" aria-hidden="true"><div class="jvfront"><img data-src="' + esc(src) + '" alt="' + (i + 1) + '" decoding="async"><i class="jvshade"></i></div><i class="jvback"></i></div>';
+      }).join('') + '</div></div>' +
       '<div class="jvhint"></div>' +
       '<div class="jvnav" dir="rtl">' +
         '<button class="press" type="button" data-jv-prev><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
@@ -133,26 +137,53 @@
         '<button class="press" type="button" data-jv-next><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>' +
       '</div>';
     document.body.appendChild(V);
-    var pages = V.querySelector('.jvpages');
-    pages.addEventListener('scroll', function () {
-      var k = Math.round(Math.abs(pages.scrollLeft) / (pages.clientWidth || 1));
-      if (k !== cur) show(k);
-    }, { passive: true });
+    var stack = V.querySelector('.jvstack');
     V.addEventListener('click', function (e) {
       if (e.target.closest('[data-jv-close]')) closeJournal();
+      else if (e.target.closest('[data-jv-mem]')) { closeJournal(); openMemory(); }
       else if (e.target.closest('[data-jv-prev]')) go(cur - 1);
       else if (e.target.closest('[data-jv-next]')) go(cur + 1);
+      else if (e.target.closest('.jvstack')) {
+        // tap the left part of the page to go forward, the right part to go back (right-to-left paper)
+        var r = stack.getBoundingClientRect();
+        if (e.clientX < r.left + r.width * 0.4) go(cur + 1); else if (e.clientX > r.right - r.width * 0.4) go(cur - 1);
+      }
     });
     V.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') closeJournal();
       else if (e.key === 'ArrowLeft') go(cur + 1);   // right-to-left paper: left is forward
       else if (e.key === 'ArrowRight') go(cur - 1);
     });
+    // swipe: drag the page to the right to turn forward, to the left to go back; two fingers are left to pinch-zoom
+    var sx = null, sy = 0;
+    stack.addEventListener('touchstart', function (e) { if (e.touches.length === 1) { sx = e.touches[0].clientX; sy = e.touches[0].clientY; } else sx = null; }, { passive: true });
+    stack.addEventListener('touchend', function (e) {
+      if (sx === null) return;
+      var p = e.changedTouches[0], dx = p.clientX - sx, dy = p.clientY - sy; sx = null;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3) { e.preventDefault(); go(dx > 0 ? cur + 1 : cur - 1); }
+    });
+    window.addEventListener('resize', fit);
     return V;
+  }
+  // size the page stack to the printed page's shape inside the free space
+  function fit() {
+    if (!V || V.hidden) return;
+    var book = V.querySelector('.jvbook'), stack = V.querySelector('.jvstack');
+    var w = book.clientWidth - 24, h = book.clientHeight - 12;
+    if (w <= 0 || h <= 0) return;
+    if (w / h > RATIO) w = h * RATIO; else h = w / RATIO;
+    stack.style.width = Math.floor(w) + 'px'; stack.style.height = Math.floor(h) + 'px';
   }
   function load(k) {
     var img = V && V.querySelectorAll('.jvp img')[k];
     if (img && !img.src && img.getAttribute('data-src')) img.src = img.getAttribute('data-src');
+  }
+  function layer(k, top) {
+    [].forEach.call(V.querySelectorAll('.jvp'), function (p, j) {
+      p.classList.toggle('on', j === k || j === top);
+      p.style.zIndex = j === top ? 3 : (j === k ? 2 : 0);
+      if (j !== top) p.style.transform = '';
+    });
   }
   function show(k) {
     var n = PAGES.length, t = TXT[vLang];
@@ -161,13 +192,25 @@
     [].forEach.call(V.querySelectorAll('.jvdots i'), function (d, j) { d.className = j === cur ? 'on' : ''; });
     V.querySelector('[data-jv-prev]').disabled = cur === 0;
     V.querySelector('[data-jv-next]').disabled = cur === n - 1;
+    layer(cur, -1);
     load(cur); load(cur + 1); load(cur - 1);
   }
   function go(k) {
-    var pages = V.querySelector('.jvpages'), n = PAGES.length;
+    var n = PAGES.length;
     k = Math.max(0, Math.min(n - 1, k));
-    var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    pages.scrollTo({ left: -k * pages.clientWidth, behavior: reduce ? 'auto' : 'smooth' });   // RTL: page 2 sits to the left
+    if (k === cur || busy) return;
+    var ps = V.querySelectorAll('.jvp'), fwd = k > cur;
+    // forward: the current page turns away and reveals k under it; back: page k turns back onto the stack
+    var turning = fwd ? ps[cur] : ps[k];
+    load(k);
+    if (reduced() || !turning.animate) return show(k);
+    busy = true;
+    layer(fwd ? k : cur, fwd ? cur : k);
+    var from = fwd ? 'rotateY(0deg)' : 'rotateY(180deg)', to = fwd ? 'rotateY(180deg)' : 'rotateY(0deg)';
+    var shade = turning.querySelector('.jvshade');
+    var a = turning.animate([{ transform: from }, { transform: to }], { duration: 720, easing: 'cubic-bezier(.35,.1,.25,1)' });
+    shade.animate(fwd ? [{ opacity: 0 }, { opacity: 0.55 }] : [{ opacity: 0.55 }, { opacity: 0 }], { duration: 360, fill: 'forwards' });
+    a.onfinish = function () { busy = false; shade.getAnimations && shade.getAnimations().forEach(function (x) { x.cancel(); }); show(k); };
   }
   function openJournal(lang, from) {
     if (!PAGES.length) return;
@@ -177,13 +220,15 @@
     V.setAttribute('dir', vLang === 'ar' ? 'rtl' : 'ltr');
     V.classList.toggle('is-ar', vLang === 'ar');
     V.querySelector('#jv-title').textContent = t.jH;
+    V.querySelector('#jv-mem').textContent = t.mH;
     V.querySelector('.jvhint').textContent = t.hint;
     V.querySelector('[data-jv-close]').setAttribute('aria-label', t.close);
     V.querySelector('[data-jv-prev]').setAttribute('aria-label', t.prev);
     V.querySelector('[data-jv-next]').setAttribute('aria-label', t.next);
     backTo = from || null;
+    busy = false;
     V.hidden = false;
-    V.querySelector('.jvpages').scrollLeft = 0;
+    fit();
     show(0);
     V.querySelector('[data-jv-close]').focus();
   }
