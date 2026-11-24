@@ -53,7 +53,7 @@ With `NODE_ENV=production` the server refuses to start without `WHATSAPP_PROVIDE
 ## كنت هنا (memory cards for the journal)
 `assets/memory.js` (lazy-loaded from the journal section on the cover, or directly at `<menu>/#kont-hena` for a table QR). The customer logs in with the same OTP, fills the memory card (who they were with, drink, song, sky colour, a quote) and their picks for the next issue (book, film, song, story), adds a photo, and gets a 1080×1920 Instagram story drawn on the phone (share sheet or save). Every card is saved in `memories`.
 
-- **Photos are uploaded only with consent** (checkbox on the photo step). Without it the photo never leaves the phone. Stored photos live in `$LOYALTY_DATA/memory-photos/`; deleting a memory deletes its photo.
+- **The customer's original photo is never uploaded.** The story is drawn on the phone; only the finished 1080×1920 design is uploaded, and only when the customer ticks the consent box. Stored designs live in `$LOYALTY_DATA/memory-photos/`; deleting a memory deletes its design.
 - Customer API: `GET/POST /api/me/memories`, `GET /api/me/memories/<id>/photo`, `DELETE /api/me/memories/<id>`.
 - Owner (admin staff only): `GET /api/staff/memories?since=<ms>`, `GET /api/staff/memories/<id>/photo`.
 - Export for planning the next issue (Excel-ready CSV with phones):

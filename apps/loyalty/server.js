@@ -32,7 +32,8 @@ CREATE INDEX IF NOT EXISTS stamps_created ON stamps(created_at);
 CREATE INDEX IF NOT EXISTS rewards_customer ON rewards(customer_id);
 CREATE INDEX IF NOT EXISTS audit_customer ON audit_log(customer_id, id);
 -- "كنت هنا": a customer's memory card from a visit + their picks for the next journal issue.
--- photo is a file name in the photo folder, kept only when the customer agreed (consent=1).
+-- photo is the file name of the finished story design (JPEG) in the photo folder, kept only when the customer agreed (consent=1).
+-- The customer's original photo is never uploaded.
 CREATE TABLE IF NOT EXISTS memories(id INTEGER PRIMARY KEY, customer_id INTEGER NOT NULL REFERENCES customers(id), created_at INTEGER NOT NULL,
   visit_date TEXT, with_whom TEXT, drink TEXT, song TEXT, sky TEXT, quote TEXT,
   rec_book TEXT, rec_film TEXT, rec_song TEXT, story TEXT, consent INTEGER NOT NULL DEFAULT 0, photo TEXT);
@@ -42,7 +43,7 @@ CREATE INDEX IF NOT EXISTS memories_created ON memories(created_at);
 // memory card: allowed sky colours (the page shows the swatches) and text limits
 const SKY = ['honey', 'gold', 'sunset', 'rose', 'blue', 'night', 'cloud'];
 const MEM_FIELDS = { visit_date: 40, with_whom: 80, drink: 80, song: 100, quote: 240, rec_book: 120, rec_film: 120, rec_song: 120, story: 1200 };
-const MEM_PHOTO_MAX = 1.5e6; // bytes of JPEG after the browser resizes it (about 1080 px wide)
+const MEM_PHOTO_MAX = 1.5e6; // bytes of the finished 1080×1920 story JPEG
 
 function hashPass(p) { const salt = crypto.randomBytes(16); return salt.toString('hex') + ':' + crypto.scryptSync(p, salt, 64).toString('hex'); }
 function checkPass(p, stored) { const [s, h] = String(stored).split(':'); const c = crypto.scryptSync(String(p), Buffer.from(s, 'hex'), 64); return crypto.timingSafeEqual(c, Buffer.from(h, 'hex')); }
