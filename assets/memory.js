@@ -294,74 +294,68 @@
   }
   var AF = '"IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif', LF = '"Libre Bodoni", Georgia, serif';
 
+  // Story design from Sequoia-Story-Frame.psd (1080×1920):
+  //   1. the guest photo fills the background, heavily blurred (PSD: Gaussian ~50 px)
+  //   2. assets/story/frame.webp = every fixed PSD layer flattened (navy tint 51%, card, logo, café entrance, footer line)
+  //   3. the guest photo again in the REPLACE_PHOTO slot (60,421 960×864, 14 px corners)
+  //   4. EDIT_HEADLINE → "Sequoia's memory" in Nib Pro; EDIT_GUEST_NAME → who they were with
+  var FRAME = { photo: [60, 421, 960, 864, 14], head: [989, 1394, 478], name: [988, 1464, 478] };
+  var nibReady = null;
+  function nib() {
+    if (!nibReady) nibReady = (window.FontFace && document.fonts
+      ? new FontFace('Nib Pro', 'url(assets/fonts/nib-pro-semibold.ttf)', { weight: '600' }).load().then(function (f) { document.fonts.add(f); })
+      : Promise.resolve()).catch(function () {});
+    return nibReady;
+  }
+  function rrect(x, l, tp, w, h, r) {
+    x.beginPath(); x.moveTo(l + r, tp); x.lineTo(l + w - r, tp); x.quadraticCurveTo(l + w, tp, l + w, tp + r);
+    x.lineTo(l + w, tp + h - r); x.quadraticCurveTo(l + w, tp + h, l + w - r, tp + h); x.lineTo(l + r, tp + h);
+    x.quadraticCurveTo(l, tp + h, l, tp + h - r); x.lineTo(l, tp + r); x.quadraticCurveTo(l, tp, l + r, tp); x.closePath();
+  }
+  // a strong, smooth blur that works on every phone: shrink the photo a lot, then scale it back up in two steps
+  function blurCover(x, img, W, H) {
+    var a = document.createElement('canvas'); a.width = 36; a.height = 64;
+    var ax = a.getContext('2d'); ax.imageSmoothingQuality = 'high'; cover(ax, img, 0, 0, 36, 64);
+    var b = document.createElement('canvas'); b.width = 270; b.height = 480;
+    var bx = b.getContext('2d'); bx.imageSmoothingQuality = 'high'; bx.drawImage(a, 0, 0, 270, 480);
+    x.imageSmoothingQuality = 'high'; x.drawImage(b, 0, 0, W, H);
+  }
+  function noPhoto(x, l, tp, w, h, sky) {
+    var g = x.createLinearGradient(0, tp, 0, tp + h);
+    g.addColorStop(0, sky ? sky[1] : '#DDA15E'); g.addColorStop(.6, '#B5607A'); g.addColorStop(.61, '#2B3247'); g.addColorStop(1, '#1F2A44');
+    x.fillStyle = g; x.fillRect(l, tp, w, h);
+    x.fillStyle = '#F7D9A0'; x.beginPath(); x.arc(l + w * .33, tp + h * .56, h * .1, 0, Math.PI * 2); x.fill();
+  }
+
   function draw(m, photo) {
-    var fonts = document.fonts ? Promise.all(['700 64px "IBM Plex Sans Arabic"', '500 36px "IBM Plex Sans Arabic"', 'italic 400 40px "Libre Bodoni"', '700 40px "Libre Bodoni"'].map(function (f) { return document.fonts.load(f).catch(function () {}); })) : Promise.resolve();
-    return Promise.all([fonts, loadImg(photo), loadImg('assets/tree-cream.webp'), loadImg('assets/navy-texture-v2.webp'), loadImg('assets/tree-navy.webp')]).then(function (r) {
-      var pic = r[1], treeC = r[2], tex = r[3], treeN = r[4];
+    var fonts = document.fonts ? Promise.all(['400 37px "IBM Plex Sans Arabic"'].map(function (f) { return document.fonts.load(f).catch(function () {}); })) : Promise.resolve();
+    return Promise.all([fonts, nib(), loadImg(photo), loadImg('assets/story/frame.webp')]).then(function (r) {
+      var pic = r[2], frame = r[3], sky = skyOf(m.sky);
       var W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H;
-      var x = c.getContext('2d'), sky = skyOf(m.sky);
-      // ground: navy texture + a band of the chosen sky colour at the top
-      x.fillStyle = '#1F2A44'; x.fillRect(0, 0, W, H);
-      if (tex) { x.globalAlpha = .9; cover(x, tex, 0, 0, W, H); x.globalAlpha = 1; }
-      var g = x.createLinearGradient(0, 0, 0, 760);
-      g.addColorStop(0, sky ? sky[1] : '#C8A464'); g.addColorStop(1, 'rgba(31,42,68,0)');
-      x.globalAlpha = .55; x.fillStyle = g; x.fillRect(0, 0, W, 760); x.globalAlpha = 1;
-
-      // header (kept below Instagram's top bar)
-      x.direction = 'rtl'; x.textAlign = 'center'; x.fillStyle = '#F4EEE2';
-      if (treeC) x.drawImage(treeC, W / 2 - 22, 190, 44, 78);
-      x.font = 'italic 400 34px ' + LF; x.direction = 'ltr'; x.fillText('Sequoia Café · Mansoura', W / 2, 312);
-      x.direction = 'rtl'; x.font = '700 92px ' + AF; x.fillText('كنت هنا', W / 2, 420);
-
-      // polaroid
-      x.save(); x.translate(W / 2, 740); x.rotate(-0.04);
-      var pw = 660, ph = 580, pad = 32;
-      x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 40; x.shadowOffsetY = 18;
-      x.fillStyle = '#FBF8F1'; x.fillRect(-pw / 2 - pad, -ph / 2 - pad, pw + pad * 2, ph + pad * 2 + 90);
-      x.shadowColor = 'transparent';
-      if (pic) cover(x, pic, -pw / 2, -ph / 2, pw, ph);
-      else {
-        var sg = x.createLinearGradient(0, -ph / 2, 0, ph / 2);
-        sg.addColorStop(0, sky ? sky[1] : '#DDA15E'); sg.addColorStop(.62, '#B5607A'); sg.addColorStop(.63, '#2B3247'); sg.addColorStop(1, '#1F2A44');
-        x.fillStyle = sg; x.fillRect(-pw / 2, -ph / 2, pw, ph);
-        x.fillStyle = '#F7D9A0'; x.beginPath(); x.arc(-120, ph * .1, 70, 0, Math.PI * 2); x.fill();
-        if (treeN) { x.globalAlpha = .9; x.drawImage(treeN, 170, ph * .13 - 130, 76, 135); x.drawImage(treeN, 240, ph * .13 - 90, 52, 92); x.globalAlpha = 1; }
-      }
-      x.fillStyle = '#1F2A44'; x.textAlign = 'center'; x.direction = 'rtl'; x.font = '500 40px ' + AF;
-      x.fillText(m.visit_date || '', 0, ph / 2 + pad + 62);
+      var x = c.getContext('2d');
+      // 1. background
+      if (pic) blurCover(x, pic, W, H);
+      else { var g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, sky ? sky[1] : '#C8694A'); g.addColorStop(1, '#1F2A44'); x.fillStyle = g; x.fillRect(0, 0, W, H); }
+      // 2. fixed design (has the navy tint); fallback tint if it did not load
+      if (frame) x.drawImage(frame, 0, 0, W, H);
+      else { x.fillStyle = 'rgba(30,42,68,.51)'; x.fillRect(0, 0, W, H); }
+      // 3. photo slot
+      var P = FRAME.photo;
+      x.save(); rrect(x, P[0], P[1], P[2], P[3], P[4]); x.clip();
+      if (pic) cover(x, pic, P[0], P[1], P[2], P[3]); else noPhoto(x, P[0], P[1], P[2], P[3], sky);
       x.restore();
-
-      // memory card
-      var cx = 90, cy = 1225, cw = W - 180, chh = 420;
-      x.fillStyle = '#EFE6D3'; x.fillRect(cx, cy, cw, chh);
-      x.setLineDash([14, 10]); x.lineWidth = 3; x.strokeStyle = '#1F2A44'; x.strokeRect(cx + 16, cy + 16, cw - 32, chh - 32); x.setLineDash([]);
-      x.textAlign = 'right'; x.direction = 'rtl';
-      var rx = cx + cw - 50, y = cy + 78;
-      function row(label, val) {
-        if (!val) return;
-        x.font = '500 28px ' + AF; x.fillStyle = '#4A5470'; x.fillText(label, rx, y);
-        var lw = x.measureText(label).width;
-        x.font = '700 36px ' + AF; x.fillStyle = '#1F2A44';
-        var line = wrap(x, val, cw - 120 - lw)[0] || '';
-        x.fillText(line, rx - lw - 16, y + 1); y += 62;
+      // 4. headline, shrunk to fit the space beside the café entrance
+      var hd = FRAME.head, size = 81;
+      x.direction = 'ltr'; x.textAlign = 'right'; x.textBaseline = 'alphabetic'; x.fillStyle = '#1E2A44';
+      do { x.font = '600 ' + size + 'px "Nib Pro", Georgia, serif'; size -= 2; } while (x.measureText("Sequoia's memory").width > hd[2] && size > 30);
+      x.fillText("Sequoia's memory", hd[0], hd[1]);
+      // 5. who they were with
+      if (m.with_whom) {
+        var nm = FRAME.name, txt = String(m.with_whom);
+        x.direction = 'rtl'; x.textAlign = 'right'; x.fillStyle = '#5F705C'; x.font = '400 37px ' + AF;
+        while (x.measureText(txt).width > nm[2] && txt.length > 1) txt = txt.slice(0, -2) + '…';
+        x.fillText(txt, nm[0], nm[1]);
       }
-      row('كنت مع', m.with_whom); row('طلبت', m.drink); row('الأغنية', m.song);
-      if (sky) {
-        x.font = '500 28px ' + AF; x.fillStyle = '#4A5470'; x.fillText('لون السما', rx, y);
-        var lw2 = x.measureText('لون السما').width;
-        x.fillStyle = sky[1]; x.beginPath(); x.arc(rx - lw2 - 38, y - 10, 20, 0, Math.PI * 2); x.fill();
-        x.font = '700 36px ' + AF; x.fillStyle = '#1F2A44'; x.fillText(sky[2], rx - lw2 - 74, y + 1); y += 62;
-      }
-      if (m.quote) {
-        x.textAlign = 'center'; x.font = '700 40px ' + AF; x.fillStyle = '#B8432F';
-        var ql = wrap(x, '«' + m.quote + '»', cw - 140).slice(0, 3), qy = Math.max(y + 16, cy + chh - 60 - (ql.length - 1) * 54 - 10);
-        ql.forEach(function (l, i) { x.fillText(l, W / 2, qy + i * 54); });
-      }
-
-      // footer (kept above Instagram's reply bar)
-      x.textAlign = 'center'; x.fillStyle = '#F4EEE2'; x.direction = 'ltr';
-      x.font = 'italic 400 34px ' + LF; x.fillText('Riverside coffee, warm moments.', W / 2, 1712);
-      x.font = '700 30px ' + LF; x.fillStyle = '#C8A464'; x.fillText(handle(), W / 2, 1760);
       return c;
     });
   }
