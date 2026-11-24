@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS inbound_logins(nonce_hash TEXT PRIMARY KEY, code TEXT
 CREATE INDEX IF NOT EXISTS inbound_code ON inbound_logins(code);
 CREATE TABLE IF NOT EXISTS calls(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, table_number INTEGER NOT NULL, body TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS calls_at ON calls(at);
+-- captain "تقفيل اليوم": the captain screen replays nothing from before the last close
+CREATE TABLE IF NOT EXISTS day_closes(id INTEGER PRIMARY KEY, at INTEGER NOT NULL, staff_id INTEGER);
 CREATE INDEX IF NOT EXISTS stamps_customer_at ON stamps(customer_id, created_at);
 DROP INDEX IF EXISTS stamps_customer;
 CREATE INDEX IF NOT EXISTS stamps_created ON stamps(created_at);
@@ -506,10 +508,11 @@ function createApp(opts = {}) {
       return send(res, 404, { error: 'not found' });
     }
 
-    // captain screen: live table calls (replays the last 12 h on connect) and took/undo updates
+    // captain screen: live table calls (replays the last 12 h on connect, never from before the last day close) and took/undo updates
     if (p === '/staff/calls/stream' && M === 'GET') {
       stream(req, res, 'calls');
-      for (const r of Q('SELECT id, at, body FROM calls WHERE at>? ORDER BY id').all(t - CALL_HISTORY_MS))
+      const closed = Q('SELECT MAX(at) AS at FROM day_closes').get().at || 0;
+      for (const r of Q('SELECT id, at, body FROM calls WHERE at>? ORDER BY id').all(Math.max(t - CALL_HISTORY_MS, closed)))
         res.write(`event: msg\ndata: ${JSON.stringify({ id: r.id, time: r.at, body: JSON.parse(r.body) })}\n\n`);
       return;
     }
@@ -525,6 +528,13 @@ function createApp(opts = {}) {
         if (!r.ok) return send(res, 502, { error: 'sheet' });
       } catch { return send(res, 502, { error: 'sheet' }); }
       return send(res, 200, { ok: true });
+    }
+    // "تقفيل اليوم": the captain saved everything to the sheet; clear the history on every captain screen
+    if (p === '/staff/day/close' && M === 'POST') {
+      Q('INSERT INTO day_closes(at,staff_id) VALUES(?,?)').run(t, staff.id);
+      audit('staff', staff.id, 'day_close', null, null, ctx);
+      addCall({ type: 'dayclose', table: '0', by: staff.name }, t);
+      return send(res, 200, { ok: true, at: t });
     }
     if (p === '/staff/calls' && M === 'POST') {
       const b = await readBody(req); const tn = tableNo(b.table);

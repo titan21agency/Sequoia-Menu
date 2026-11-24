@@ -521,18 +521,6 @@
     });
     acctLoading.then(function () { SequoiaAccount.open(app, { table: table }); }, function () {});
   }
-  // song request (cover page card): sent to the captain screen as a request; without a table QR, WhatsApp instead
-  if (window.SequoiaLanding) SequoiaLanding.onSong = function (title) {
-    var wa = ((window.SEQUOIA_CONFIG || {}).WHATSAPP_URL || '');
-    if (!table) {
-      if (wa) window.open(wa + '?text=' + encodeURIComponent((lang === 'ar' ? 'عايز أطلب أغنية: ' : 'Song request: ') + title), '_blank', 'noopener');
-      return Promise.resolve('wa');
-    }
-    if (!window.SequoiaOrders) return Promise.reject(new Error('offline'));
-    var at = Date.now();
-    return SequoiaOrders.publish({ type: 'req', table: table, item: ('song:' + title).slice(0, 80), rid: at.toString(36) + Math.random().toString(36).slice(2, 6) })
-      .then(function () { return 'sent'; });
-  };
   // ---- live menu: the published menu + sold out from the server. The list at the top of this file is only the
   // fallback for a first visit without a connection; the last menu seen is kept on the phone for the next visit.
   var SOLD = {}, menuKey = null, fetching = false;

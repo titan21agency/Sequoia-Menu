@@ -16,9 +16,6 @@
           pages: function (n) { return n + ' صفحة'; },
           cH: 'فعاليات سيكويا', cSoon: '', cSub: '',
           cIntro: 'مواعيد الموسم على شط النيل.. السما بتعمل العرض.',
-          gH: 'اطلب أغنيتك', gSub: 'عايز تسمع إيه؟ اكتب اسم الأغنية والمطرب، وهنشغّلها لك.',
-          gPh: 'اسم الأغنية · المطرب', gBtn: 'اطلب الأغنية', gSent: 'وصلت! الأغنية في الطابور.', gWa: 'كمّل الطلب في واتساب.',
-          gEmpty: 'اكتب اسم الأغنية الأول.', gFail: 'مقدرناش نبعت الطلب. جرّب تاني.',
           sH: 'متنسوش تتابعونا', foot: 'سيكويا كافيه · المنصورة · من 2026',
           page: function (a, b) { return 'صفحة ' + a + ' من ' + b; }, hint: 'اسحب الصفحة أو دوس على طرفها علشان تقلبها',
           close: 'قفل', prev: 'الصفحة اللي قبلها', next: 'الصفحة اللي بعدها' },
@@ -27,9 +24,6 @@
           pages: function (n) { return n + ' pages'; },
           cH: 'Sequoia Events', cSoon: '', cSub: '',
           cIntro: 'This season by the Nile. The sky puts on the show.',
-          gH: 'Request a song', gSub: 'What do you want to hear? Type the song and artist, and we’ll play it.',
-          gPh: 'Song · artist', gBtn: 'Request song', gSent: 'Got it! Your song is in the queue.', gWa: 'Finish the request on WhatsApp.',
-          gEmpty: 'Type a song name first.', gFail: 'Couldn’t send the request. Try again.',
           sH: 'Follow along', foot: 'Sequoia Café · Mansoura · Est. 2026',
           page: function (a, b) { return 'Page ' + a + ' of ' + b; }, hint: 'Swipe the page or tap its edge to turn it',
           close: 'Close', prev: 'Previous page', next: 'Next page' }
@@ -106,16 +100,6 @@
       '</div></section>';
   }
 
-  var NOTE = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
-  function song(lang, t) {
-    return '<section class="lsec" aria-labelledby="l-song">' + head('l-song', t.gH, 'Jukebox') +
-      '<form class="song reveal" data-song novalidate>' +
-        '<p>' + t.gSub + '</p>' +
-        '<input class="sginput" name="song" type="text" maxlength="70" autocomplete="off" enterkeyhint="send" placeholder="' + t.gPh + '" aria-label="' + t.gPh + '">' +
-        '<button class="press jread" type="submit">' + NOTE + '<span>' + t.gBtn + '</span></button>' +
-        '<div class="sgmsg" role="status" aria-live="polite"></div>' +
-      '</form></section>';
-  }
   function social(lang, t) {
     var links = SOCIAL.map(function (s) { return [safeUrl(CFG[s[0]]), s[1], s[2]]; }).filter(function (s) { return s[0]; });
     return '<section class="lsocial" aria-labelledby="l-social">' +
@@ -273,7 +257,7 @@
     },
     html: function (lang) {
       var t = TXT[lang === 'ar' ? 'ar' : 'en'];
-      return '<div class="below" id="below">' + journal(lang, t) + memory(lang, t) + clubs(lang, t) + song(lang, t) + social(lang, t) + '</div>';
+      return '<div class="below" id="below">' + journal(lang, t) + memory(lang, t) + clubs(lang, t) + social(lang, t) + '</div>';
     },
     // scroller: the cover's scrolling element (re-created on every render)
     mount: function (scroller, lang) {
@@ -285,22 +269,6 @@
           if (below) scroller.scrollTo({ top: scroller.scrollTop + below.getBoundingClientRect().top - scroller.getBoundingClientRect().top, behavior: reduce ? 'auto' : 'smooth' });
         } else if ((b = e.target.closest('[data-journal]'))) openJournal(lang, b);
         else if (e.target.closest('[data-memory]')) openMemory();
-      });
-      var form = scroller.querySelector('[data-song]');
-      if (form) form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        var t = TXT[lang === 'ar' ? 'ar' : 'en'], inp = form.querySelector('input'), msg = form.querySelector('.sgmsg'), btn = form.querySelector('button');
-        var v = inp.value.replace(/\s+/g, ' ').trim();
-        msg.className = 'sgmsg';
-        if (!v) { msg.textContent = t.gEmpty; msg.classList.add('err'); inp.focus(); return; }
-        if (!window.SequoiaLanding.onSong) return;
-        btn.disabled = true; btn.classList.add('is-loading'); btn.setAttribute('aria-busy', 'true');
-        window.SequoiaLanding.onSong(v).then(function (how) {
-          msg.textContent = how === 'wa' ? t.gWa : t.gSent;
-          if (how !== 'wa') inp.value = '';
-        }, function () {
-          msg.textContent = t.gFail; msg.classList.add('err');
-        }).then(function () { btn.disabled = false; btn.classList.remove('is-loading'); btn.removeAttribute('aria-busy'); });
       });
       // QR on the tables can point at <menu>/#kont-hena to open "كنت هنا" directly
       if (location.hash === '#kont-hena') openMemory();

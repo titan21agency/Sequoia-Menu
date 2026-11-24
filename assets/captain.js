@@ -51,6 +51,8 @@ function startApp() {
   // ---- state from messages ----
   var KINDS = { call: 1, bill: 1, req: 1 };
   function apply(msg, meta) {
+    // "تقفيل اليوم" from any captain screen: the handled history goes (it is in the sheet); open tables stay
+    if (msg.type === 'dayclose') { taken = []; log = []; return false; }
     var t = String(msg.table || '').replace(/\D/g, '');
     if (!t) return false;
     if (KINDS[msg.type]) {
@@ -162,7 +164,11 @@ function startApp() {
       stat(s.avg == null ? '—' : dur(s.avg), 'متوسط الاستجابة', true) +
       stat(s.max == null ? '—' : dur(s.max), 'أطول انتظار', true) +
       stat(s.peak == null ? '—' : hourLabel(s.peak), 'أكتر ساعة زحمة' + (s.peakN ? ' (' + s.peakN + ')' : ''), true) +
-      '</div><p class="sumnote">' + (partial ? 'الشاشة دي بتشوف آخر ١٢ ساعة بس، فالأرقام دي ناقصة أول اليوم. الأرقام الكاملة في شيت التقارير. ' : '') + saveNote() + '</p></section>';
+      '</div><p class="sumnote">' + (partial ? 'الشاشة دي بتشوف آخر ١٢ ساعة بس، فالأرقام دي ناقصة أول اليوم. الأرقام الكاملة في شيت التقارير. ' : '') + saveNote() + '</p>' +
+      (log.length ? '<button class="press dayclose' + (closeArm > Date.now() ? ' armed' : '') + '" type="button" data-dayclose' + (closing ? ' disabled' : '') + '>' +
+        (closing ? 'بنحفظ في الشيت…' : closeArm > Date.now() ? 'متأكد؟ دوس تاني لتقفيل اليوم' : 'تقفيل اليوم') + '</button>' +
+        '<p class="sumnote">بيحفظ كل اللي اتعمل في الشيت، وبعدين يمسح السجل من شاشات الكابتن. الترابيزات المستنية بتفضل زي ما هي.</p>' : '') +
+      '</section>';
     main.innerHTML = html;
     fresh = {};
     document.title = (tables.length ? '(' + tables.length + ') ' : '') + 'Sequoia — الكابتن';
@@ -180,6 +186,19 @@ function startApp() {
       o.push({ due: at + LOG_DELAY, row: { rid: c.rid, table: t, kind: c.kind, detail: c.detail || '', requested: new Date(c.time).toISOString(), handled: new Date(at).toISOString(), wait_seconds: Math.round((at - c.time) / 1000) } });
     });
     setOutbox(o);
+  }
+  // send everything waiting, without the usual 2-minute undo delay (used by "تقفيل اليوم")
+  function flushAll() {
+    var o = outbox();
+    if (!o.length) return Promise.resolve();
+    if (!REPORT_URL) return Promise.reject(new Error('no sheet'));
+    return fetch(REPORT_URL, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'sequoia' }, body: JSON.stringify({ rows: o.map(function (x) { return x.row; }) }) })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        var ids = o.map(function (x) { return x.row.rid; });
+        setOutbox(outbox().filter(function (x) { return ids.indexOf(x.row.rid) < 0; }));
+        try { localStorage.setItem('sq-saved-at', String(Date.now())); } catch (_) {}
+      });
   }
   function unqueue(ids) { setOutbox(outbox().filter(function (x) { return ids.indexOf(x.row.rid) < 0; })); }
   var flushing = false;
@@ -299,7 +318,22 @@ function startApp() {
   }
 
   // ---- actions ----
+  var closeArm = 0, closing = false;
+  function closeDay() {
+    if (closing) return;
+    if (closeArm < Date.now()) { closeArm = Date.now() + 5000; render(); setTimeout(render, 5100); return; }   // second tap within 5 s confirms
+    closeArm = 0; closing = true; render();
+    flushAll()
+      .then(function () {
+        return fetch('/api/staff/day/close', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'sequoia' }, body: '{}' })
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); });
+      })
+      .then(function () { toast('اليوم اتقفل، وكل حاجة اتحفظت في الشيت'); },
+            function () { toast('مقدرناش نحفظ في الشيت، فاليوم ماتقفلش. جرّب تاني'); })
+      .then(function () { closing = false; render(); });
+  }
   main.addEventListener('click', function (e) {
+    if (e.target.closest('[data-dayclose]')) { closeDay(); return; }
     var b = e.target.closest('[data-take]');
     if (b) {
       var t = b.getAttribute('data-take'), items = (pending[t] || []).slice();
