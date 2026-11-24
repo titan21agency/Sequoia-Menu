@@ -393,7 +393,7 @@ function startApp() {
       loaded = true;
       var sc = document.createElement('script'); sc.src = 'assets/captain-card.js';
       sc.onload = function () { SequoiaCaptainCard.mount(panes.card); };
-      sc.onerror = function () { loaded = false; panes.card.textContent = 'مقدرناش نفتح كارت سيكويا. جرّب تاني.'; };
+      sc.onerror = function () { loaded = false; panes.card.textContent = 'مقدرناش نفتح Loyalty card. جرّب تاني.'; };
       document.head.appendChild(sc);
     }
   }

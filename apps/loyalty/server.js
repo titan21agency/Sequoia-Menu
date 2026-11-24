@@ -406,7 +406,7 @@ function createApp(opts = {}) {
         if (limited('mem:' + c.id, 20, 24 * H, t)) return send(res, 429, { error: 'rate' });
         let b; try { b = await readBody(req, MEM_PHOTO_MAX * 1.4 + 2e4); } catch { return send(res, 413, { error: 'size' }); }
         const m = memIn(b);
-        if (!m.with_whom && !m.drink && !m.song && !m.quote && !m.sky && !m.rec_book && !m.rec_film && !m.rec_song && !m.story) return send(res, 400, { error: 'empty' });
+        if (!m.visit_date && !m.with_whom && !m.drink && !m.song && !m.quote && !m.sky && !m.rec_book && !m.rec_film && !m.rec_song && !m.story) return send(res, 400, { error: 'empty' });
         let photo = null;
         if (b.photo != null && b.photo !== '') {
           if (!m.consent) return send(res, 400, { error: 'consent' });

@@ -1,5 +1,5 @@
 /*
- * Sequoia Card — captain tab. Loaded only when "كارت سيكويا" is opened.
+ * Sequoia Card — captain tab ("Loyalty card"). Loaded only when that tab is opened.
  * Needs a staff login (server-side session). Every stamp/redeem is validated and audited on the server.
  */
 (function () {
@@ -64,7 +64,7 @@
   }
 
   function cardBox() {
-    if (!cur) return '<div class="cc-box"><h3>العميل</h3><p class="cc-empty">دوّر برقم الموبايل أو اختار عميل من الترابيزات.</p></div>';
+    if (!cur) return '<div class="cc-box"><h3>العميل</h3><p class="cc-empty">ابحث برقم الموبايل أو اختار عميل من الترابيزات.</p></div>';
     var c = cur.card, dots = '';
     for (var i = 0; i < c.required; i++) dots += '<i class="' + (i < c.count ? 'on' : '') + '"></i>';
     var ops = cur.ops.items.map(function (o) {
@@ -91,7 +91,7 @@
     }).join('') || '<p class="cc-empty">مفيش عملاء مسجلين على ترابيزات دلوقتي.</p>';
     root.innerHTML = '<div class="cc-head"><span>' + esc(me.name) + '</span><button class="press cc-link" data-logout type="button">خروج</button></div>' +
       '<div class="cc"><div style="display:flex;flex-direction:column;gap:18px">' +
-        '<form class="cc-box" id="cc-find"><h3>دوّر برقم الموبايل</h3><div class="cc-search"><input class="cc-in" name="q" type="tel" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="16" value="' + esc(q) + '"><button class="press cc-btn" type="submit">دوّر</button></div></form>' +
+        '<form class="cc-box" id="cc-find"><h3>بحث برقم الموبايل</h3><div class="cc-search"><input class="cc-in" name="q" type="tel" inputmode="tel" dir="ltr" placeholder="01xxxxxxxxx" maxlength="16" value="' + esc(q) + '"><button class="press cc-btn" type="submit">بحث</button></div></form>' +
         '<div class="cc-box"><h3>على الترابيزات دلوقتي</h3>' + rows + '</div>' +
       '</div>' + cardBox() + '</div>';
   }
