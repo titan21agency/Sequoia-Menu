@@ -19,7 +19,7 @@
     phone: 'اكتب رقم موبايل مصري صح (01xxxxxxxxx).', code: 'الكود مش صح أو خلص وقته. جرّب تاني.',
     rate: 'محاولات كتير. استنى شوية وجرّب تاني.', wait: 'استنى شوية قبل ما تطلب كود جديد.',
     send: 'مقدرناش نبعت الكود دلوقتي. جرّب كمان شوية.', net: 'مفيش اتصال. اتأكد من النت وجرّب تاني.',
-    empty: 'اكتب حاجة واحدة على الأقل في الكارت.', consent: 'علشان نحتفظ بصورتك لازم توافق تحت.',
+    empty: 'اكتب التاريخ أو كنت مع مين.', consent: 'علشان نحتفظ بصورتك لازم توافق تحت.',
     photo: 'الصورة دي مش مناسبة. جرّب صورة تانية.', size: 'الصورة كبيرة قوي. جرّب صورة تانية.', save: 'مقدرناش نحفظ الذكرى. جرّب تاني.'
   };
 
@@ -121,25 +121,11 @@
     }
 
     if (s.view === 'card') {
-      var sk = skyOf(s.f.sky);
       return '<h2 id="mem-title">كنت هنا</h2>' +
         '<p class="sub">سجّل ذكرى زيارتك، وأضف صورة من قعدتك، واحصل عليها في تصميم ستوري جاهز للمشاركة.</p>' + steps('card') +
         '<div class="mem-card"><span class="sc" aria-hidden="true">✂</span>' +
           field('visit_date', 'التاريخ', '') +
           field('with_whom', 'كنت مع', 'مين كان معاك؟') +
-          field('drink', 'طلبت', 'المشروب والحلو') +
-          field('song', 'الأغنية اللي كانت شغالة', 'ولا كان الهوا بس؟') +
-          '<span class="l" id="mem-sky-l">لون السما</span><div class="mem-sky" role="group" aria-labelledby="mem-sky-l">' +
-            SKY.map(function (x) { return '<button type="button" data-sky="' + x[0] + '" style="background:' + x[1] + '" aria-label="' + x[2] + '" aria-pressed="' + (s.f.sky === x[0]) + '"></button>'; }).join('') +
-          '</div><div class="mem-skyname">' + (sk ? sk[2] : '') + '</div>' +
-          field('quote', 'جملة اتقالت على الترابيزة ومش عاوز تنساها', 'اكتبها زي ما اتقالت', true) +
-          '<details' + (s.f.rec_book || s.f.rec_film || s.f.rec_song || s.f.story ? ' open' : '') + '><summary>ترشيحاتك للعدد الجاي من الجرنال</summary>' +
-            '<p class="note">العدد التاني بيتعمل من ترشيحاتكم. أحلى حكاية بتتنشر وصاحبها بيكسب هدية.</p>' +
-            field('rec_book', 'كتاب ترشحه لنادي الكتاب', 'اسم الكتاب') +
-            field('rec_film', 'فيلم نفسك تشوفه في سينما الشط', 'اسم الفيلم') +
-            field('rec_song', 'أغنية تتحط في «شريط الغروب»', 'الأغنية والمطرب') +
-            field('story', 'حكايتك مع النيل أو مع المنصورة', 'أول خروجة، صورة قديمة، موقف مش ناسيه…', true) +
-          '</details>' +
         '</div>' +
         '<div class="mem-msg" role="alert">' + esc(s.err) + '</div>' +
         '<button class="mem-btn" type="button" data-next>الخطوة الجاية: صورتك</button>' +
@@ -236,7 +222,7 @@
   }
 
   // ---------------- save + draw the story ----------------
-  function filled() { var f = state.f; return f.with_whom || f.drink || f.song || f.quote || f.sky || f.rec_book || f.rec_film || f.rec_song || f.story; }
+  function filled() { var f = state.f; return f.with_whom || f.visit_date; }   // the card is just the date and who you were with
   function make() {
     if (state.busy) return;
     if (!filled()) { state.view = 'card'; state.err = MSG.empty; return paint(); }
