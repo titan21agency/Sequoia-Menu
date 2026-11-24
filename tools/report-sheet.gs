@@ -2,6 +2,7 @@
  * Sequoia — report sheet for the captain screen.
  * Every request the captain marks as done is added as a row in "Log".
  * "Daily" summarises each business day (starting 6 AM).
+ * Each business day also gets its own tab named by its date (e.g. 2026-11-24) with that day's rows.
  *
  * Setup: a standalone Apps Script project → paste this → run setup() once →
  * Deploy → New deployment → Web app → Execute as: Me, Who has access: Anyone → copy the /exec URL.
@@ -52,6 +53,15 @@ function doPost(e) {
       seen[r.rid] = 1;
     });
     if (out.length) log.getRange(log.getLastRow() + 1, 1, out.length, out[0].length).setValues(out);
+    // the same rows, split by business day into one tab per day
+    var byDay = {};
+    out.forEach(function (r) { (byDay[r[0]] = byDay[r[0]] || []).push(r); });
+    var ss = log.getParent();
+    Object.keys(byDay).forEach(function (day) {
+      var sh = ss.getSheetByName(day);
+      if (!sh) { sh = ss.insertSheet(day); sh.appendRow(HEADERS); sh.setFrozenRows(1); }
+      sh.getRange(sh.getLastRow() + 1, 1, byDay[day].length, HEADERS.length).setValues(byDay[day]);
+    });
     return ContentService.createTextOutput('ok');
   } finally {
     lock.releaseLock();
